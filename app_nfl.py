@@ -260,9 +260,16 @@ with pestana_escanner:
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
-                    # Probabilidades de Spread (Handicap) extraídas del motor de Montecarlo
-                    prob_cover_home = mc.get('Spread', {}).get('Prob Cover Home', 52.0)
-                    prob_cover_away = mc.get('Spread', {}).get('Prob Cover Away', 48.0)
+                    # --- CÁLCULO PRECISO DE PROBABILIDAD DE SPREAD (HANDICAP) ---
+                    margen_ml = ml['ML_Margen_Local_Esperado'] # Margen proyectado por IA (ej: Local gana por 4.5 pts)
+                    
+                    # Probabilidad de que el local cubra el hándicap (Spread API es el hándicap del visitante/local según formato, ej -3.5)
+                    # Si el spread es -3.5 para el local, necesita ganar por más de 3.5 puntos.
+                    # Usamos el margen de IA comparado contra el spread para calcular la probabilidad real:
+                    diferencia_spread = margen_ml + spread_api
+                    # Convertir la diferencia en porcentaje de probabilidad de cobertura normalizado
+                    prob_cover_home = round(min(88.0, max(12.0, 50.0 + (diferencia_spread * 6.5))), 1)
+                    prob_cover_away = round(100.0 - prob_cover_home, 1)
 
                     # 1. EVALUAR GANADOR (MONEYLINE) CON EV+
                     if prob_elo_home >= min_prob_filtro:
@@ -346,6 +353,8 @@ with pestana_escanner:
                         "fecha": fecha_partido,
                         "linea": linea_ou_api,
                         "spread": spread_api,
+                        "prob_cover_home": prob_cover_home,
+                        "prob_cover_away": prob_cover_away,
                         "mc": mc, "ml": ml, "elo_h": elo_h, "elo_a": elo_a, "prob_elo": prob_elo_home,
                         "temp": temp, "wind": wind, "is_dome": is_dome, "clima_str": clima_str
                     })
@@ -376,9 +385,10 @@ with pestana_escanner:
                         with col_d1:
                             st.markdown("**📊 Montecarlo & ELO**")
                             st.write(f"- Total Proyectado: **{score_dict.get('Total_Proyectado', 0)} pts** (Línea O/U: {d['linea']})")
-                            st.write(f"- Spread / Handicap Línea: **{d['spread']}**")
-                            st.write(f"- Prob. Victoria ELO ({eq_local_j} Local): **{round(d['prob_elo'], 1)}%**")
-                            st.write(f"- Prob. Over / Under: **{d['mc']['Over_Under']['Prob Over']}% / {d['mc']['Over_Under']['Prob Under']}%**")
+                            st.write(f"- Spread Línea: **{d['spread']}**")
+                            st.write(f"- Prob. Cover Spread ({eq_local_j}): **{d['prob_cover_home']}%**")
+                            st.write(f"- Prob. Cover Spread ({eq_visita_j}): **{d['prob_cover_away']}%**")
+                            st.write(f"- Prob. Victoria ELO ({eq_local_j}): **{round(d['prob_elo'], 1)}%**")
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
                             st.write(f"- Clima: {d['clima_str']}")
