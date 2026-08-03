@@ -108,16 +108,16 @@ def obtener_clima_estadio(equipo_local):
         
     return temp_base, viento_base, False
 
-def convertir_momio_americano_a_decimal(momio_str):
-    """Convierte un string de momio americano (ej. '-110' o '+150') a formato decimal"""
+def convertir_momio_americano_decimal(momio_str):
+    """Convierte un string de momio americano (ej. '-110' o '+150') a formato decimal de forma segura"""
     try:
-        val = int(momio_str)
+        val = int(str(momio_str).replace("+", ""))
         if val > 0:
             return round((val / 100.0) + 1.0, 2)
         else:
             return round((100.0 / abs(val)) + 1.0, 2)
     except:
-        return 1.91 # Respaldo estándar (-110)
+        return 1.91
 
 def convertir_prob_a_momio_americano(prob_porcentaje):
     p = prob_porcentaje / 100.0
@@ -141,7 +141,7 @@ def obtener_odds_espn_real(semana, temporada=2026):
         "KC":  "KC",  "LV":  "LV",  "LAC": "LAC", "LAR": "LA",  "MIA": "MIA",
         "MIN": "MIN", "NE":  "NE",  "NO":  "NO",  "NYG": "NYG", "NYJ": "NYJ",
         "PHI": "PHI", "PIT": "PIT", "SF":  "SF",  "SEA": "SEA", "TB":  "TB",
-        "TEN": "TEN", "WSH": "WAS", "WAS": "WAS"
+        "TEN": "TEN", "WSH": "WAS", "WSH": "WAS"
     }
 
     odds_dict = {}
@@ -262,7 +262,7 @@ with pestana_escanner:
                         dec_ml = convertir_momio_americano_decimal(momio_ml)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
                         
-                        if ev_val > 0: # Exigir EV+ positivo real
+                        if ev_val > 0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {p_val}% | {momio_ml} | +{ev_val}% | ✅ CONSENSO BLINDADO")
                             
                     if prob_elo_away >= min_prob_filtro:
