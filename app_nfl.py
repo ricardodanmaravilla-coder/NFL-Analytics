@@ -131,9 +131,9 @@ with pestana_escanner:
                 ml_engine = PredictorNFL_ML()
                 ml_engine.entrenar(df_games, df_qbs)
                 
-                oportunidades_encontradas = 0
-                st.write("---")
-                st.write(f"🔎 **Resultados del Escaneo (Filtro {min_prob_filtro}%+) - Semana {semana_auto}:**")
+                # Lista para recolectar las apuestas recomendadas y mostrarlas arriba
+                apuestas_destacadas = []
+                detalles_juegos = []
                 
                 for _, j in juegos_df.iterrows():
                     home_code = j.get("home_team")
@@ -147,11 +147,9 @@ with pestana_escanner:
                     linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
                     spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                     
-                    # Ejecutar Motores
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
                     ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
                     
-                    # ELO del partido
                     elo_h = motor_elo_global.ratings.get(home_code, 1500)
                     elo_a = motor_elo_global.ratings.get(away_code, 1500)
                     prob_elo_home = motor_elo_global.calcular_probabilidad_elo(elo_h, elo_a) * 100
@@ -164,81 +162,85 @@ with pestana_escanner:
                     es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
                     es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
                     
-                    clima_str = "🏠 Domo" if is_dome else f"🌡️ {temp}°F 💨 {wind}mph"
-                    
-                    with st.expander(f"📅 {fecha_partido} | 🏈 {away_code} ({int(elo_a)}) @ {home_code} ({int(elo_h)}) | Línea O/U: {linea_ou_api}"):
-                        col_d1, col_d2 = st.columns(2)
+                    veredicto = "Neutral"
+                    if es_over:
+                        veredicto = f"OVER {linea_ou_api} ({prob_over}% prob)"
+                        apuestas_destacadas.append(f"🔥 **{away_code} @ {home_code}** ➔ Recomendación: **OVER {linea_ou_api}** ({prob_over}% de efectividad)")
+                    elif es_under:
+                        veredicto = f"UNDER {linea_ou_api} ({prob_under}% prob)"
+                        apuestas_destacadas.append(f"🔥 **{away_code} @ {home_code}** ➔ Recomendación: **UNDER {linea_ou_api}** ({prob_under}% de efectividad)")
                         
+                    detalles_juegos.append({
+                        "juego": f"{away_code} @ {home_code}",
+                        "fecha": fecha_partido,
+                        "linea": linea_ou_api,
+                        "mc": mc, "ml": ml, "elo_h": elo_h, "elo_a": elo_a, "prob_elo": prob_elo_home,
+                        "temp": temp, "wind": wind, "is_dome": is_dome, "veredicto": veredicto, "es_recomendado": (es_over or es_under)
+                    })
+
+                # --- MOSTRAR RESUMEN DIRECTO DE APUESTAS RECOMENDADAS ---
+                st.write("---")
+                if apuestas_destacadas:
+                    st.success(f"🎯 **¡Se encontraron {len(apuestas_destacadas)} Apuestas de Oro con Consenso Blindado!**")
+                    for ap in apuestas_destacadas:
+                        st.markdown(f"- {ap}")
+                else:
+                    st.warning("⚠️ No se encontraron partidos que cumplan estrictamente con el filtro del porcentaje mínimo para esta semana.")
+
+                st.write("---")
+                st.markdown("### 📋 Desglose Completo de la Jornada")
+                
+                # Renderizar los expanders con el detalle de cada partido
+                for d in detalles_juegos:
+                    clima_str = "🏠 Domo" if d["is_dome"] else f"🌡️ {d['temp']}°F 💨 {d['wind']}mph"
+                    with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Estado: {d['veredicto']}"):
+                        col_d1, col_d2 = st.columns(2)
                         with col_d1:
                             st.markdown("**📊 Montecarlo & ELO**")
-                            st.write(f"- Proyección Score: {away_code} **{mc['Proyeccion_Score'][away_code]}** - **{mc['Proyeccion_Score'][home_code]}** {home_code}")
-                            st.write(f"- Total Proyectado: **{total_mc} pts**")
-                            st.write(f"- Prob. Victoria ELO ({home_code}): **{round(prob_elo_home, 1)}%**")
-                            st.write(f"- Prob. Over / Under: **{prob_over}% / {prob_under}%**")
-                            
+                            st.write(f"- Proyección Score: **{d['mc']['Proyeccion_Score']}**")
+                            st.write(f"- Total Proyectado: **{d['mc']['Proyeccion_Score']['Total_Proyectado']} pts**")
+                            st.write(f"- Prob. Victoria ELO: **{round(d['prob_elo'], 1)}%**")
+                            st.write(f"- Prob. Over / Under: **{d['mc']['Over_Under']['Prob Over']}% / {d['mc']['Over_Under']['Prob Under']}%**")
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
                             st.write(f"- Clima: {clima_str}")
-                            st.write(f"- Puntos Ajustados IA: **{total_ml} pts**")
-                            st.write(f"- Margen Local Previsto: **{ml['ML_Margen_Local_Esperado']} pts**")
-                        
-                        st.markdown("---")
-                        if es_over:
-                            oportunidades_encontradas += 1
-                            st.success(f"🎯 **APUESTA RECOMENDADA (OVER {linea_ou_api}):** Consenso de modelos con **{prob_over}%** de efectividad (Supera tu filtro).")
-                        elif es_under:
-                            oportunidades_encontradas += 1
-                            st.success(f"🎯 **APUESTA RECOMENDADA (UNDER {linea_ou_api}):** Consenso de modelos con **{prob_under}%** de efectividad (Supera tu filtro).")
-                        else:
-                            st.warning(f"⚠️ **DESCARTADO:** No cumple con el filtro del {min_prob_filtro}% o los motores discrepan.")
-
-                st.write("---")
-                st.success(f"🎯 **Escaneo finalizado.** Se encontraron **{oportunidades_encontradas} apuestas de alto valor** con el filtro del {min_prob_filtro}%+.")
+                            st.write(f"- Puntos Ajustados IA: **{d['ml']['ML_Puntos_Totales_Esperados']} pts**")
+                            st.write(f"- Margen Local Previsto: **{d['ml']['ML_Margen_Local_Esperado']} pts**")
 
 # ==========================================
 # 2. PESTAÑA: ANALIZADOR DE YARDAS DE QBS
 # ==========================================
 with pestana_qbs:
     st.markdown("### 🎯 Analizador de Yardas por Pase (Quarterback Props)")
-    st.write("Consulta el rendimiento reciente de cualquier mariscal de campo y simula la probabilidad de superar su línea de yardas en Las Vegas.")
-    
     if df_qbs.empty:
         st.error("No hay registros históricos de QBs disponibles.")
     else:
         lista_qbs = sorted(list(df_qbs['player_name'].dropna().unique()))
         qb_seleccionado = st.selectbox("Selecciona o escribe el nombre del Quarterback:", lista_qbs)
-        linea_yardas_lv = st.number_input("Línea de Yardas por Pase de Las Vegas (Ej. 245.5):", min_value=100.0, max_value=400.0, value=245.5, step=0.5)
+        linea_yardas_lv = st.number_input("Línea de Yardas por Pase de Las Vegas:", min_value=100.0, max_value=400.0, value=245.5, step=0.5)
         
         if st.button("Simular Props de Yardas", type="primary"):
             qb_engine = PredictorYardasQB(df_qbs)
             resultado_qb = qb_engine.proyectar_yardas_qb(qb_seleccionado, linea_yardas_lv)
-            
             if "error" in resultado_qb:
                 st.error(resultado_qb["error"])
             else:
                 st.success(f"📈 Análisis completado para **{resultado_qb['QB']}**")
                 qb_col1, qb_col2, qb_col3 = st.columns(3)
-                qb_col1.metric("Promedio Reciente (Yardas)", f"{resultado_qb['Yardas_Promedio_Recientes']} yds")
-                qb_col2.metric(f"Prob. Over {linea_yardas_lv}", f"{resultado_qb['Prob_Over_Yardas']}%")
-                qb_col3.metric(f"Prob. Under {linea_yardas_lv}", f"{resultado_qb['Prob_Under_Yardas']}%")
-                
-                if "OVER" in resultado_qb["Recomendacion"]:
-                    st.info(f"💡 **Recomendación:** Alta probabilidad de superar la línea. Apuntar al **{resultado_qb['Recomendacion']}**.")
-                elif "UNDER" in resultado_qb["Recomendacion"]:
-                    st.info(f"💡 **Recomendación:** Tendencia a la baja. Apuntar al **{resultado_qb['Recomendacion']}**.")
-                else:
-                    st.warning("⚠️ Sin valor estadístico claro en esta línea de yardas.")
+                qb_col1.metric("Promedio Reciente", f"{resultado_qb['Yardas_Promedio_Recientes']} yds")
+                qb_col2.metric("Prob. Over", f"{resultado_qb['Prob_Over_Yardas']}%")
+                qb_col3.metric("Prob. Under", f"{resultado_qb['Prob_Under_Yardas']}%")
 
 # ==========================================
 # 3. PESTAÑA: POWER RANKING ELO
 # ==========================================
 with pestana_power:
     st.markdown("### 📈 Power Ranking ELO Actualizado de la NFL")
-    st.write("El ELO evalúa el nivel de poder de los 32 equipos basado en sus victorias históricas y el margen de dominio.")
+    st.write("Tabla general de poder de los 32 equipos basada en el historial de rendimiento y margen de victoria.")
     
     ranking = motor_elo_global.obtener_power_ranking()
     df_ranking = pd.DataFrame(ranking, columns=["Equipo", "Rating ELO"])
     df_ranking['Rating ELO'] = df_ranking['Rating ELO'].round(1)
     df_ranking.index = range(1, len(df_ranking) + 1)
     
-    st.dataframe(df_ranking, use_container_width=True)
+    st.dataframe(df_ranking, use_container_width=True, height=600)
