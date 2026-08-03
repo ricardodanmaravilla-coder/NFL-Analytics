@@ -100,14 +100,16 @@ def obtener_calendario_nfl(temporada, semana):
 # --- PANEL AUTOMÁTICO DE JORNADA ---
 st.markdown("### 🤖 Escáner Automático de Jornada (NFL)")
 
-col_auto1, col_auto2 = st.columns(2)
+col_auto1, col_auto2, col_auto3 = st.columns(3)
 with col_auto1:
     temporada_auto = st.number_input("Temporada:", min_value=2020, max_value=2030, value=2026)
 with col_auto2:
     semana_auto = st.number_input("Semana a escanear:", min_value=1, max_value=22, value=1)
+with col_auto3:
+    min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
-if st.button("🚀 Escanear Toda la Semana en Busca de Valor", type="primary"):
-    with st.spinner("Analizando calendarios, satélites de clima y modelos matemáticos..."):
+if st.button("🚀 Escanear con Filtro Estricto (60%+)", type="primary"):
+    with st.spinner("Filtrando oportunidades de oro y cruzando modelos..."):
         juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
         
         if juegos_df.empty:
@@ -119,7 +121,7 @@ if st.button("🚀 Escanear Toda la Semana en Busca de Valor", type="primary"):
             oportunidades_encontradas = 0
             
             st.write("---")
-            st.write(f"🔎 **Resultados del Escaneo para la Semana {semana_auto}:**")
+            st.write(f"🔎 **Escaneo con filtro del {min_prob_filtro}%+ para la Semana {semana_auto}:**")
             
             for _, j in juegos_df.iterrows():
                 home_code = j.get("home_team")
@@ -132,7 +134,7 @@ if st.button("🚀 Escanear Toda la Semana en Busca de Valor", type="primary"):
                 # Clima automático
                 temp, wind, is_dome = obtener_clima_estadio(home_code)
                 
-                # Líneas de Las Vegas desde el calendario
+                # Líneas de Las Vegas
                 linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
                 spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                 
@@ -143,12 +145,16 @@ if st.button("🚀 Escanear Toda la Semana en Busca de Valor", type="primary"):
                 total_mc = mc['Proyeccion_Score']['Total_Proyectado']
                 total_ml = ml['ML_Puntos_Totales_Esperados']
                 
-                # Lógica de Consenso EV+
-                es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api)
-                es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api)
+                prob_over = mc['Over_Under']['Prob Over']
+                prob_under = mc['Over_Under']['Prob Under']
+                
+                # Lógica de Consenso EV+ aplicando tu filtro estricto (> min_prob_filtro)
+                es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
+                es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
                 
                 clima_str = "🏠 Domo" if is_dome else f"🌡️ {temp}°F 💨 {wind}mph"
                 
+                # Solo mostrar si pasa el filtro o mostrar todas con etiqueta de advertencia
                 with st.expander(f"📅 {fecha_partido} | 🏈 {away_code} @ {home_code} | Línea O/U: {linea_ou_api}"):
                     col_det1, col_det2 = st.columns(2)
                     
@@ -156,26 +162,30 @@ if st.button("🚀 Escanear Toda la Semana en Busca de Valor", type="primary"):
                         st.markdown("**📊 Métricas Base (Montecarlo)**")
                         st.write(f"- Proyección Score: {away_code} **{mc['Proyeccion_Score'][away_code]}** - **{mc['Proyeccion_Score'][home_code]}** {home_code}")
                         st.write(f"- Total Proyectado: **{total_mc} pts**")
-                        st.write(f"- Prob. Over {linea_ou_api}: **{mc['Over_Under']['Prob Over']}%**")
-                        st.write(f"- Prob. Under {linea_ou_api}: **{mc['Over_Under']['Prob Under']}%**")
+                        st.write(f"- Prob. Over: **{prob_over}%**")
+                        st.write(f"- Prob. Under: **{prob_under}%**")
                         
                     with col_det2:
                         st.markdown("**🤖 Ajuste de Entorno (Machine Learning)**")
                         st.write(f"- Clima del Estadio: {clima_str}")
                         st.write(f"- Puntos Ajustados por IA: **{total_ml} pts**")
                         st.write(f"- Margen Local Previsto: **{ml['ML_Margen_Local_Esperado']} pts**")
+                        
+                        # Nota sobre QBs
+                        if not df_qbs.empty:
+                            st.write("- 🏈 *Datos de QBs:* Base histórica cargada (Pendiente de integrar métrica de yardas finas).")
                     
                     st.markdown("---")
                     
-                    # Veredicto final automático
+                    # Veredicto final con el filtro estricto aplicado
                     if es_over:
                         oportunidades_encontradas += 1
-                        st.success(f"✅ **CONSENSO BLINDADO (OVER):** Montecarlo ({total_mc}) y Machine Learning ({total_ml}) coinciden en superar la línea de {linea_ou_api}.")
+                        st.success(f"🎯 **APUESTA RECOMENDADA (OVER {linea_ou_api}):** Consenso de modelos con **{prob_over}%** de efectividad (Supera tu filtro del {min_prob_filtro}%).")
                     elif es_under:
                         oportunidades_encontradas += 1
-                        st.success(f"✅ **CONSENSO BLINDADO (UNDER):** Ambos modelos proyectan un partido trabado por debajo de {linea_ou_api} pts.")
+                        st.success(f"🎯 **APUESTA RECOMENDADA (UNDER {linea_ou_api}):** Consenso de modelos con **{prob_under}%** de efectividad (Supera tu filtro del {min_prob_filtro}%).")
                     else:
-                        st.warning("⚠️ **SIN CONSENSO:** Los modelos discrepan debido al entorno o la varianza. Se recomienda omitir.")
+                        st.warning(f"⚠️ **DESCARTADO:** No cumple con el filtro mínimo del {min_prob_filtro}% de efectividad o los motores discrepan.")
 
             st.write("---")
-            st.success(f"🎯 **Escaneo finalizado.** Se detectaron **{oportunidades_encontradas} Oportunidades de Oro** con consenso blindado para esta semana.")
+            st.success(f"🎯 **Escaneo finalizado.** Se encontraron **{oportunidades_encontradas} apuestas de alto valor** que superan tu filtro del {min_prob_filtro}%.")
