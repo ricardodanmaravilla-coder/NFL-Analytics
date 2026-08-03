@@ -248,8 +248,6 @@ with pestana_escanner:
                         spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                     
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
-                    
-                    # Llamada actualizada con el enfrentamiento de poder Ofensivo vs Defensivo real de ambos equipos
                     ml = ml_engine.predecir_contexto(semana_auto, home_code, away_code, temp, wind, 1 if is_dome else 0)
                     
                     elo_h = motor_elo_global.ratings.get(home_code, 1500)
@@ -262,9 +260,18 @@ with pestana_escanner:
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
-                    margen_ml = ml['ML_Margen_Local_Esperado']
-                    diferencia_spread = margen_ml + spread_api
-                    prob_cover_home = round(min(88.0, max(12.0, 50.0 + (diferencia_spread * 6.5))), 1)
+                    # --- UNIFICACIÓN LÓGICA DE MARCADOR Y SPREAD ---
+                    score_dict = mc['Proyeccion_Score']
+                    equipos_sim = [k for k in score_dict.keys() if k != 'Total_Proyectado']
+                    eq_v_sim = equipos_sim[0] if len(equipos_sim) > 0 else away_code
+                    eq_l_sim = equipos_sim[1] if len(equipos_sim) > 1 else home_code
+                    
+                    pts_local_proj = score_dict.get(eq_l_sim, 21.0)
+                    pts_visita_proj = score_dict.get(eq_v_sim, 21.0)
+                    
+                    margen_simulado = pts_local_proj - pts_visita_proj
+                    diferencia_spread = margen_simulado + spread_api
+                    prob_cover_home = round(min(95.0, max(5.0, 50.0 + (diferencia_spread * 7.5))), 1)
                     prob_cover_away = round(100.0 - prob_cover_home, 1)
 
                     # 1. EVALUAR GANADOR (MONEYLINE) CON FILTRO EV+ PROFESIONAL (+5% a +25%)
