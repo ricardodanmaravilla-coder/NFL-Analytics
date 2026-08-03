@@ -98,18 +98,23 @@ def obtener_clima_estadio(equipo_local):
     except:
         return 65.0, 5.0, False
 
-def obtener_calendario_api(semana, temporada):
-    """Descarga juegos de API-Sports basados en la temporada y semana indicadas"""
-    if not API_KEY: return []
-    url = f"{BASE_URL_NFL}/games?league=1&season={temporada}"
+# --- NUEVA FUNCIÓN DE CALENDARIO LOCAL / OFICIAL ---
+def obtener_calendario_nfl(temporada, semana):
+    """Obtiene los partidos de la semana directamente de nuestra base de datos local"""
     try:
-        res = requests.get(url, headers=HEADERS).json()
-        juegos = res.get("response", [])
-        # En API-Sports, filtramos por semana (Ej: "Week 1", "Preseason 1", etc.)
-        juegos_semana = [j for j in juegos if f"Week {semana}" in str(j.get("game", {}).get("week", ""))]
-        return juegos_semana
-    except:
-        return []
+        # Filtramos los juegos del año y semana seleccionados
+        juegos_temp = df_games[(df_games['season'] == temporada) & (df_games['week'] == semana)].copy()
+        
+        if juegos_temp.empty:
+            # Si el CSV local no tiene la semana (ej. partidos futuros nuevos), usamos nfl_data_py al vuelo
+            import nfl_data_py as nfl
+            df_sched = nfl.import_schedules([temporada])
+            juegos_temp = df_sched[(df_sched['season'] == temporada) & (df_sched['week'] == semana)].copy()
+            
+        return juegos_temp
+    except Exception as e:
+        st.error(f"Error al obtener el calendario: {e}")
+        return pd.DataFrame()
 
 # --- PANEL AUTOMÁTICO ---
 st.markdown("### 🤖 Escáner Automático de Jornada")
@@ -121,44 +126,41 @@ with col_auto2:
     semana_auto = st.number_input("Buscar juegos de la Semana:", min_value=1, max_value=22, value=1)
 
 if st.button("Buscar Partidos y Extraer Clima", type="primary"):
-    with st.spinner("Conectando con Las Vegas y satélites del clima..."):
-        # Ahora pasamos dinámicamente la temporada 2026 (o la que elijas)
-        juegos = obtener_calendario_api(semana_auto, temporada_auto)
+    with st.spinner("Consultando calendario oficial y satélites del clima..."):
+        # Obtenemos los partidos del DataFrame en lugar de la API externa
+        juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
         
-        if not juegos:
-            st.warning("⚠️ No se encontraron partidos en la API para esta semana o revisa tu API Key.")
+        if juegos_df.empty:
+            st.warning(f"⚠️ No se encontraron partidos para la Temporada {temporada_auto}, Semana {semana_auto}.")
         else:
             ml_engine = PredictorNFL_ML()
             ml_engine.entrenar(df_games, df_qbs)
             
-            for j in juegos:
-                home_api = j["teams"]["home"]["name"]
-                away_api = j["teams"]["away"]["name"]
-                
-                # Traducir nombres (Ej: Kansas City Chiefs -> KC)
-                home_code = nfl_team_map.get(home_api)
-                away_code = nfl_team_map.get(away_api)
+            # Iteramos sobre el DataFrame de partidos oficiales
+            for _, j in juegos_df.iterrows():
+                # En nfl_data_py las columnas se llaman 'home_team' y 'away_team' (ya vienen en formato código ej. 'KC', 'BUF')
+                home_code = j.get("home_team")
+                away_code = j.get("away_team")
                 
                 if not home_code or not away_code:
                     continue
                     
-                # Extraer clima automático
+                # Extraer clima automático usando Open-Meteo
                 temp, wind, is_dome = obtener_clima_estadio(home_code)
                 
-                # Extraer Líneas básicas que nos da el endpoint de juegos
-                # (Nota: Para cuotas más finas se requiere el endpoint /odds, aquí usamos las del pre-match si vienen)
-                linea_ou_api = 45.5 # Fallback temporal si la API no manda odds directas
-                spread_api = -3.0   
+                # Líneas base de Las Vegas (las podemos ajustar o dejar estándar para el escáner)
+                linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
+                spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                 
                 with st.expander(f"🏈 {away_code} @ {home_code} | Clima: {'🏠 Domo' if is_dome else f'🌡️ {temp}°F 💨 {wind}mph'}"):
-                    # Correr modelos
+                    # Correr modelos híbridos
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
                     ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
                     
                     st.write(f"**Proyección Montecarlo:** {away_code} {mc['Proyeccion_Score'][away_code]} - {mc['Proyeccion_Score'][home_code]} {home_code}")
                     st.write(f"**Ajuste Machine Learning:** Puntos totales esperados: {ml['ML_Puntos_Totales_Esperados']}")
                     
-                    # Consenso rápido
+                    # Consenso rápido de valor
                     if mc['Proyeccion_Score']['Total_Proyectado'] > linea_ou_api and ml['ML_Puntos_Totales_Esperados'] > linea_ou_api:
                         st.success("🔥 ALERTA EV+: Ambos modelos proyectan OVER.")
                     elif mc['Proyeccion_Score']['Total_Proyectado'] < linea_ou_api and ml['ML_Puntos_Totales_Esperados'] < linea_ou_api:
