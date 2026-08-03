@@ -81,9 +81,7 @@ motor_elo_global = calcular_elo_global(df_games)
 
 # --- FUNCIONES AUXILIARES ---
 def obtener_clima_estadio(equipo_local):
-    """Consulta el clima en vivo o aplica respaldo estacional según la región"""
     info = estadios_info.get(equipo_local, {"lat": 0, "lon": 0, "dome": False})
-    
     if info["dome"]: 
         return 70.0, 0.0, True
     
@@ -109,6 +107,73 @@ def obtener_clima_estadio(equipo_local):
         viento_base = 5.0
         
     return temp_base, viento_base, False
+
+def obtener_odds_casinos_real():
+    """Consulta los momios y líneas reales de Las Vegas usando The Odds API de forma gratuita"""
+    odds_key = None
+    try:
+        if "THE_ODDS_API_KEY" in st.secrets:
+            odds_key = st.secrets["THE_ODDS_API_KEY"]
+    except:
+        pass
+    
+    if not odds_key:
+        odds_key = os.environ.get("THE_ODDS_API_KEY")
+        
+    if not odds_key:
+        return {}
+    
+    url = f"https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?regions=us&markets=spreads,totals&oddsFormat=american&apiKey={odds_key}"
+    try:
+        res = requests.get(url, timeout=5).json()
+        odds_dict = {}
+        if isinstance(res, list):
+            for partido in res:
+                home_team = partido.get("home_team")
+                bookmakers = partido.get("bookmakers", [])
+                if bookmakers:
+                    markets = bookmakers[0].get("markets", [])
+                    spread_val = -3.0
+                    total_val = 45.5
+                    price_over = -110
+                    price_under = -110
+                    
+                    for m in markets:
+                        if m["key"] == "spreads":
+                            for outcome in m["outcomes"]:
+                                if outcome.get("name") == home_team:
+                                    spread_val = outcome.get("point", -3.0)
+                        if m["key"] == "totals":
+                            for outcome in m["outcomes"]:
+                                if outcome.get("name") == "Over":
+                                    total_val = outcome.get("point", 45.5)
+                                    price_over = outcome.get("price", -110)
+                                if outcome.get("name") == "Under":
+                                    price_under = outcome.get("price", -110)
+                                    
+                    team_mapping_inv = {
+                        "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
+                        "Buffalo Bills": "BUF", "Carolina Panthers": "CAR", "Chicago Bears": "CHI",
+                        "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE", "Dallas Cowboys": "DAL",
+                        "Denver Broncos": "DEN", "Detroit Lions": "DET", "Green Bay Packers": "GB",
+                        "Houston Texans": "HOU", "Indianapolis Colts": "IND", "Jacksonville Jaguars": "JAX",
+                        "Kansas City Chiefs": "KC", "Las Vegas Raiders": "LV", "Los Angeles Chargers": "LAC",
+                        "Los Angeles Rams": "LA", "Miami Dolphins": "MIA", "Minnesota Vikings": "MIN",
+                        "New England Patriots": "NE", "New Orleans Saints": "NO", "New York Giants": "NYG",
+                        "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT",
+                        "San Francisco 49ers": "SF", "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB",
+                        "Tennessee Titans": "TEN", "Washington Commanders": "WAS"
+                    }
+                    codigo_corto = team_mapping_inv.get(home_team, home_team)
+                    odds_dict[codigo_corto] = {
+                        "spread": spread_val,
+                        "total": total_val,
+                        "price_over": price_over,
+                        "price_under": price_under
+                    }
+        return odds_dict
+    except:
+        return {}
 
 def obtener_calendario_nfl(temporada, semana):
     try:
@@ -140,8 +205,9 @@ with pestana_escanner:
         min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
     if st.button("🚀 Escanear Toda la Semana (Multi-Motor)", type="primary"):
-        with st.spinner("Analizando ELO, Montecarlo, Clima y Machine Learning..."):
+        with st.spinner("Consultando casinos en vivo, ELO, Montecarlo y Clima..."):
             juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
+            odds_reales_dict = obtener_odds_casinos_real()
             
             if juegos_df.empty:
                 st.warning(f"⚠️ No se encontraron partidos para la Temporada {temporada_auto}, Semana {semana_auto}.")
@@ -163,9 +229,12 @@ with pestana_escanner:
                     temp, wind, is_dome = obtener_clima_estadio(home_code)
                     clima_str = "🏠 Domo (Controlado)" if is_dome else f"🌡️ {temp}°F | 💨 {wind} mph"
                     
-                    # Extracción automática de la línea oficial de Las Vegas desde el dataset
-                    linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
-                    spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
+                    # Extracción inteligente: Usa la API en vivo si existe; si no, usa el respaldo del calendario histórico
+                    equipo_odds = odds_reales_dict.get(home_code, {})
+                    linea_ou_api = float(equipo_odds.get("total", j.get("total", 45.5) if pd.notna(j.get("total")) else 45.5))
+                    spread_api = float(equipo_odds.get("spread", j.get("spread_line", -3.0) if pd.notna(j.get("spread_line")) else -3.0))
+                    price_over = equipo_odds.get("price_over", -110)
+                    price_under = equipo_odds.get("price_under", -110)
                     
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
                     ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
@@ -184,16 +253,20 @@ with pestana_escanner:
                     
                     veredicto = "Neutral"
                     if es_over:
-                        veredicto = f"OVER {linea_ou_api} (-110) - {prob_over}% prob"
-                        apuestas_destacadas.append(f"🔥 **{away_code} @ {home_code}** ➔ Recomendación: **OVER {linea_ou_api}** | Momio: **-110** ({prob_over}% de efectividad)")
+                        p_over_str = f"+{price_over}" if price_over > 0 else str(price_over)
+                        veredicto = f"OVER {linea_ou_api} ({p_over_str}) - {prob_over}% prob"
+                        apuestas_destacadas.append(f"🔥 **{away_code} @ {home_code}** ➔ Recomendación: **OVER {linea_ou_api}** | Momio: **{p_over_str}** ({prob_over}% de efectividad)")
                     elif es_under:
-                        veredicto = f"UNDER {linea_ou_api} (-110) - {prob_under}% prob"
-                        apuestas_destacadas.append(f"🔥 **{away_code} @ {home_code}** ➔ Recomendación: **UNDER {linea_ou_api}** | Momio: **-110** ({prob_under}% de efectividad)")
+                        p_under_str = f"+{price_under}" if price_under > 0 else str(price_under)
+                        veredicto = f"UNDER {linea_ou_api} ({p_under_str}) - {prob_under}% prob"
+                        apuestas_destacadas.append(f"🔥 **{away_code} @ {home_code}** ➔ Recomendación: **UNDER {linea_ou_api}** | Momio: **{p_under_str}** ({prob_under}% de efectividad)")
                         
                     detalles_juegos.append({
                         "juego": f"{away_code} @ {home_code}",
                         "fecha": fecha_partido,
                         "linea": linea_ou_api,
+                        "price_over": price_over,
+                        "price_under": price_under,
                         "mc": mc, "ml": ml, "elo_h": elo_h, "elo_a": elo_a, "prob_elo": prob_elo_home,
                         "temp": temp, "wind": wind, "is_dome": is_dome, "clima_str": clima_str,
                         "veredicto": veredicto, "es_recomendado": (es_over or es_under)
@@ -212,7 +285,10 @@ with pestana_escanner:
                 st.markdown("### 📋 Desglose Completo de la Jornada")
                 
                 for d in detalles_juegos:
-                    with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Línea O/U: {d['linea']} (-110) | Estado: {d['veredicto']}"):
+                    p_over_str = f"+{d['price_over']}" if d['price_over'] > 0 else str(d['price_over'])
+                    p_under_str = f"+{d['price_under']}" if d['price_under'] > 0 else str(d['price_under'])
+                    
+                    with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Línea O/U: {d['linea']} (Over {p_over_str} / Under {p_under_str}) | Estado: {d['veredicto']}"):
                         col_d1, col_d2 = st.columns(2)
                         with col_d1:
                             st.markdown("**📊 Montecarlo & ELO**")
@@ -228,8 +304,8 @@ with pestana_escanner:
                             st.write(f"- Proyección Score: **{eq_visita_j} {p_visita} - {p_local} {eq_local_j}**")
                             st.write(f"- Total Proyectado: **{total_pts_entero} pts**")
                             st.write(f"- Prob. Victoria ELO: **{round(d['prob_elo'], 1)}%**")
-                            st.write(f"- Prob. Over (-110): **{d['mc']['Over_Under']['Prob Over']}%**")
-                            st.write(f"- Prob. Under (-110): **{d['mc']['Over_Under']['Prob Under']}%**")
+                            st.write(f"- Prob. Over ({p_over_str}): **{d['mc']['Over_Under']['Prob Over']}%**")
+                            st.write(f"- Prob. Under ({p_under_str}): **{d['mc']['Over_Under']['Prob Under']}%**")
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
                             st.write(f"- Clima: {d['clima_str']}")
