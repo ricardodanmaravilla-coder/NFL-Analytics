@@ -80,21 +80,41 @@ def calcular_elo_global(df):
 motor_elo_global = calcular_elo_global(df_games)
 
 # --- FUNCIONES AUXILIARES ---
-def obtener_clima_estadio(equipo_local):
+def obtener_clima_estadio(equipo_local, fecha_str=""):
+    """Consulta el clima o genera un entorno realista según la ubicación y época del año"""
     info = estadios_info.get(equipo_local)
-    if not info: return 70.0, 0.0, False
-    if info["dome"]: return 70.0, 0.0, True
+    if not info: 
+        return 70.0, 0.0, False
     
+    if info["dome"]: 
+        return 70.0, 0.0, True
+    
+    # Intentar obtener el clima en vivo de Open-Meteo
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={info['lat']}&longitude={info['lon']}&current_weather=true"
-        res = requests.get(url).json()
-        temp_c = res["current_weather"]["temperature"]
-        temp_f = (temp_c * 9/5) + 32
-        wind_kmh = res["current_weather"]["windspeed"]
-        wind_mph = wind_kmh * 0.621371
-        return round(temp_f, 1), round(wind_mph, 1), False
+        res = requests.get(url, timeout=3).json()
+        if "current_weather" in res:
+            temp_c = res["current_weather"]["temperature"]
+            temp_f = (temp_c * 9/5) + 32
+            wind_kmh = res["current_weather"]["windspeed"]
+            wind_mph = wind_kmh * 0.621371
+            return round(temp_f, 1), round(wind_mph, 1), False
     except:
-        return 65.0, 5.0, False
+        pass
+    
+    # Respaldo inteligente estacional (por si la API externa no tiene datos de fechas futuras)
+    # En la temporada NFL (Septiembre a Enero), las temperaturas varían lógicamente por región
+    temp_base = 65.0
+    viento_base = 6.0
+    
+    if equipo_local in ["BUF", "GB", "NE", "CHI", "MIN"]:
+        temp_base = 42.0  # Ciudades frías del norte
+        viento_base = 12.0
+    elif equipo_local in ["MIA", "TB", "NO", "JAX", "ATL", "CAR"]:
+        temp_base = 82.0  # Ciudades cálidas del sur
+        viento_base = 5.0
+        
+    return temp_base, viento_base, False
 
 def obtener_calendario_nfl(temporada, semana):
     try:
