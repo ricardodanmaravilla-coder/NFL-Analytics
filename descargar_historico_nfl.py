@@ -11,7 +11,7 @@ def descargar_base_nfl():
     crear_directorio_data()
     
     # 1. Descargar el calendario y resultados históricos (Últimos 5 años)
-    temporadas = [2019, 2020, 2021, 2022, 2023, 2024, 2025]
+    temporadas = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
     print(f"📥 Descargando temporadas {temporadas}...")
     
     df_games = nfl.import_schedules(temporadas)
