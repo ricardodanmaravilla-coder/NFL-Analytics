@@ -5,9 +5,11 @@ import os
 import datetime
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 from modules.nfl_ml_engine import PredictorNFL_ML
+from modules.nfl_elo_engine import MotorELONFL
+from modules.nfl_qb_engine import PredictorYardasQB
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="🏈 NFL Analytics & Value Betting", layout="wide")
+st.set_page_config(page_title="🏈 NFL Analytics & Value Betting (Sistema Pro)", layout="wide")
 
 API_KEY = os.environ.get("API_SPORTS_KEY")
 HEADERS = {'x-apisports-key': API_KEY}
@@ -49,7 +51,7 @@ estadios_info = {
     "SEA": {"lat": 47.595, "lon": -122.331, "dome": False}
 }
 
-st.title("🏈 NFL Analytics & Value Betting (Automático)")
+st.title("🏈 NFL Analytics & Value Betting System Pro")
 
 # --- CARGAR HISTÓRICO ---
 @st.cache_data(ttl=3600)
@@ -64,9 +66,17 @@ def cargar_datos_nfl():
 
 df_games, df_qbs = cargar_datos_nfl()
 
-# --- FUNCIONES AUTOMÁTICAS ---
+# --- INICIALIZAR MOTORES GLOBALES ---
+@st.cache_resource
+def calcular_elo_global(df):
+    motor_elo = MotorELONFL()
+    ratings = motor_elo.actualizar_ratings(df)
+    return motor_elo
+
+motor_elo_global = calcular_elo_global(df_games)
+
+# --- FUNCIONES AUXILIARES ---
 def obtener_clima_estadio(equipo_local):
-    """Consulta el clima en vivo usando Open-Meteo (Gratis)"""
     info = estadios_info.get(equipo_local)
     if not info: return 70.0, 0.0, False
     if info["dome"]: return 70.0, 0.0, True
@@ -75,117 +85,160 @@ def obtener_clima_estadio(equipo_local):
         url = f"https://api.open-meteo.com/v1/forecast?latitude={info['lat']}&longitude={info['lon']}&current_weather=true"
         res = requests.get(url).json()
         temp_c = res["current_weather"]["temperature"]
-        temp_f = (temp_c * 9/5) + 32  # Fahrenheit para el modelo
+        temp_f = (temp_c * 9/5) + 32
         wind_kmh = res["current_weather"]["windspeed"]
-        wind_mph = wind_kmh * 0.621371 # Millas por hora (MPH)
+        wind_mph = wind_kmh * 0.621371
         return round(temp_f, 1), round(wind_mph, 1), False
     except:
         return 65.0, 5.0, False
 
 def obtener_calendario_nfl(temporada, semana):
-    """Obtiene los partidos de la semana directamente de la base de datos oficial"""
     try:
         juegos_temp = df_games[(df_games['season'] == temporada) & (df_games['week'] == semana)].copy()
-        
         if juegos_temp.empty:
             import nfl_data_py as nfl
             df_sched = nfl.import_schedules([temporada])
             juegos_temp = df_sched[(df_sched['season'] == temporada) & (df_sched['week'] == semana)].copy()
-            
         return juegos_temp
     except Exception as e:
         st.error(f"Error al obtener el calendario: {e}")
         return pd.DataFrame()
 
-# --- PANEL AUTOMÁTICO DE JORNADA ---
-st.markdown("### 🤖 Escáner Automático de Jornada (NFL)")
+# --- PESTAÑAS DE NAVEGACIÓN ---
+pestana_escanner, pestana_qbs, pestana_power = st.tabs(["🤖 Escáner de Jornada (EV+)", "🎯 Analizador de Yardas (QB Props)", "📈 Power Ranking ELO"])
 
-col_auto1, col_auto2, col_auto3 = st.columns(3)
-with col_auto1:
-    temporada_auto = st.number_input("Temporada:", min_value=2020, max_value=2030, value=2026)
-with col_auto2:
-    semana_auto = st.number_input("Semana a escanear:", min_value=1, max_value=22, value=1)
-with col_auto3:
-    min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
+# ==========================================
+# 1. PESTAÑA: ESCÁNER DE JORNADA
+# ==========================================
+with pestana_escanner:
+    st.markdown("### 🤖 Escáner Automático de Jornada (Filtro Estricto 60%+)")
 
-if st.button("🚀 Escanear con Filtro Estricto (60%+)", type="primary"):
-    with st.spinner("Filtrando oportunidades de oro y cruzando modelos..."):
-        juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
+    col_auto1, col_auto2, col_auto3 = st.columns(3)
+    with col_auto1:
+        temporada_auto = st.number_input("Temporada:", min_value=2020, max_value=2030, value=2026)
+    with col_auto2:
+        semana_auto = st.number_input("Semana a escanear:", min_value=1, max_value=22, value=1)
+    with col_auto3:
+        min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
+
+    if st.button("🚀 Escanear Toda la Semana (Multi-Motor)", type="primary"):
+        with st.spinner("Analizando ELO, Montecarlo, Clima y Machine Learning..."):
+            juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
+            
+            if juegos_df.empty:
+                st.warning(f"⚠️ No se encontraron partidos para la Temporada {temporada_auto}, Semana {semana_auto}.")
+            else:
+                ml_engine = PredictorNFL_ML()
+                ml_engine.entrenar(df_games, df_qbs)
+                
+                oportunidades_encontradas = 0
+                st.write("---")
+                st.write(f"🔎 **Resultados del Escaneo (Filtro {min_prob_filtro}%+) - Semana {semana_auto}:**")
+                
+                for _, j in juegos_df.iterrows():
+                    home_code = j.get("home_team")
+                    away_code = j.get("away_team")
+                    fecha_partido = str(j.get("gameday", "Fecha por confirmar"))
+                    
+                    if not home_code or not away_code:
+                        continue
+                        
+                    temp, wind, is_dome = obtener_clima_estadio(home_code)
+                    linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
+                    spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
+                    
+                    # Ejecutar Motores
+                    mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
+                    ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
+                    
+                    # ELO del partido
+                    elo_h = motor_elo_global.ratings.get(home_code, 1500)
+                    elo_a = motor_elo_global.ratings.get(away_code, 1500)
+                    prob_elo_home = motor_elo_global.calcular_probabilidad_elo(elo_h, elo_a) * 100
+                    
+                    total_mc = mc['Proyeccion_Score']['Total_Proyectado']
+                    total_ml = ml['ML_Puntos_Totales_Esperados']
+                    prob_over = mc['Over_Under']['Prob Over']
+                    prob_under = mc['Over_Under']['Prob Under']
+                    
+                    es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
+                    es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
+                    
+                    clima_str = "🏠 Domo" if is_dome else f"🌡️ {temp}°F 💨 {wind}mph"
+                    
+                    with st.expander(f"📅 {fecha_partido} | 🏈 {away_code} ({int(elo_a)}) @ {home_code} ({int(elo_h)}) | Línea O/U: {linea_ou_api}"):
+                        col_d1, col_d2 = st.columns(2)
+                        
+                        with col_d1:
+                            st.markdown("**📊 Montecarlo & ELO**")
+                            st.write(f"- Proyección Score: {away_code} **{mc['Proyeccion_Score'][away_code]}** - **{mc['Proyeccion_Score'][home_code]}** {home_code}")
+                            st.write(f"- Total Proyectado: **{total_mc} pts**")
+                            st.write(f"- Prob. Victoria ELO ({home_code}): **{round(prob_elo_home, 1)}%**")
+                            st.write(f"- Prob. Over / Under: **{prob_over}% / {prob_under}%**")
+                            
+                        with col_d2:
+                            st.markdown("**🤖 Machine Learning & Clima**")
+                            st.write(f"- Clima: {clima_str}")
+                            st.write(f"- Puntos Ajustados IA: **{total_ml} pts**")
+                            st.write(f"- Margen Local Previsto: **{ml['ML_Margen_Local_Esperado']} pts**")
+                        
+                        st.markdown("---")
+                        if es_over:
+                            oportunidades_encontradas += 1
+                            st.success(f"🎯 **APUESTA RECOMENDADA (OVER {linea_ou_api}):** Consenso de modelos con **{prob_over}%** de efectividad (Supera tu filtro).")
+                        elif es_under:
+                            oportunidades_encontradas += 1
+                            st.success(f"🎯 **APUESTA RECOMENDADA (UNDER {linea_ou_api}):** Consenso de modelos con **{prob_under}%** de efectividad (Supera tu filtro).")
+                        else:
+                            st.warning(f"⚠️ **DESCARTADO:** No cumple con el filtro del {min_prob_filtro}% o los motores discrepan.")
+
+                st.write("---")
+                st.success(f"🎯 **Escaneo finalizado.** Se encontraron **{oportunidades_encontradas} apuestas de alto valor** con el filtro del {min_prob_filtro}%+.")
+
+# ==========================================
+# 2. PESTAÑA: ANALIZADOR DE YARDAS DE QBS
+# ==========================================
+with pestana_qbs:
+    st.markdown("### 🎯 Analizador de Yardas por Pase (Quarterback Props)")
+    st.write("Consulta el rendimiento reciente de cualquier mariscal de campo y simula la probabilidad de superar su línea de yardas en Las Vegas.")
+    
+    if df_qbs.empty:
+        st.error("No hay registros históricos de QBs disponibles.")
+    else:
+        lista_qbs = sorted(list(df_qbs['player_name'].dropna().unique()))
+        qb_seleccionado = st.selectbox("Selecciona o escribe el nombre del Quarterback:", lista_qbs)
+        linea_yardas_lv = st.number_input("Línea de Yardas por Pase de Las Vegas (Ej. 245.5):", min_value=100.0, max_value=400.0, value=245.5, step=0.5)
         
-        if juegos_df.empty:
-            st.warning(f"⚠️ No se encontraron partidos para la Temporada {temporada_auto}, Semana {semana_auto}.")
-        else:
-            ml_engine = PredictorNFL_ML()
-            ml_engine.entrenar(df_games, df_qbs)
+        if st.button("Simular Props de Yardas", type="primary"):
+            qb_engine = PredictorYardasQB(df_qbs)
+            resultado_qb = qb_engine.proyectar_yardas_qb(qb_seleccionado, linea_yardas_lv)
             
-            oportunidades_encontradas = 0
-            
-            st.write("---")
-            st.write(f"🔎 **Escaneo con filtro del {min_prob_filtro}%+ para la Semana {semana_auto}:**")
-            
-            for _, j in juegos_df.iterrows():
-                home_code = j.get("home_team")
-                away_code = j.get("away_team")
-                fecha_partido = str(j.get("gameday", "Fecha por confirmar"))
+            if "error" in resultado_qb:
+                st.error(resultado_qb["error"])
+            else:
+                st.success(f"📈 Análisis completado para **{resultado_qb['QB']}**")
+                qb_col1, qb_col2, qb_col3 = st.columns(3)
+                qb_col1.metric("Promedio Reciente (Yardas)", f"{resultado_qb['Yardas_Promedio_Recientes']} yds")
+                qb_col2.metric(f"Prob. Over {linea_yardas_lv}", f"{resultado_qb['Prob_Over_Yardas']}%")
+                qb_col3.metric(f"Prob. Under {linea_yardas_lv}", f"{resultado_qb['Prob_Under_Yardas']}%")
                 
-                if not home_code or not away_code:
-                    continue
-                    
-                # Clima automático
-                temp, wind, is_dome = obtener_clima_estadio(home_code)
-                
-                # Líneas de Las Vegas
-                linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
-                spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
-                
-                # Ejecutar motores
-                mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
-                ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
-                
-                total_mc = mc['Proyeccion_Score']['Total_Proyectado']
-                total_ml = ml['ML_Puntos_Totales_Esperados']
-                
-                prob_over = mc['Over_Under']['Prob Over']
-                prob_under = mc['Over_Under']['Prob Under']
-                
-                # Lógica de Consenso EV+ aplicando tu filtro estricto (> min_prob_filtro)
-                es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
-                es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
-                
-                clima_str = "🏠 Domo" if is_dome else f"🌡️ {temp}°F 💨 {wind}mph"
-                
-                # Solo mostrar si pasa el filtro o mostrar todas con etiqueta de advertencia
-                with st.expander(f"📅 {fecha_partido} | 🏈 {away_code} @ {home_code} | Línea O/U: {linea_ou_api}"):
-                    col_det1, col_det2 = st.columns(2)
-                    
-                    with col_det1:
-                        st.markdown("**📊 Métricas Base (Montecarlo)**")
-                        st.write(f"- Proyección Score: {away_code} **{mc['Proyeccion_Score'][away_code]}** - **{mc['Proyeccion_Score'][home_code]}** {home_code}")
-                        st.write(f"- Total Proyectado: **{total_mc} pts**")
-                        st.write(f"- Prob. Over: **{prob_over}%**")
-                        st.write(f"- Prob. Under: **{prob_under}%**")
-                        
-                    with col_det2:
-                        st.markdown("**🤖 Ajuste de Entorno (Machine Learning)**")
-                        st.write(f"- Clima del Estadio: {clima_str}")
-                        st.write(f"- Puntos Ajustados por IA: **{total_ml} pts**")
-                        st.write(f"- Margen Local Previsto: **{ml['ML_Margen_Local_Esperado']} pts**")
-                        
-                        # Nota sobre QBs
-                        if not df_qbs.empty:
-                            st.write("- 🏈 *Datos de QBs:* Base histórica cargada (Pendiente de integrar métrica de yardas finas).")
-                    
-                    st.markdown("---")
-                    
-                    # Veredicto final con el filtro estricto aplicado
-                    if es_over:
-                        oportunidades_encontradas += 1
-                        st.success(f"🎯 **APUESTA RECOMENDADA (OVER {linea_ou_api}):** Consenso de modelos con **{prob_over}%** de efectividad (Supera tu filtro del {min_prob_filtro}%).")
-                    elif es_under:
-                        oportunidades_encontradas += 1
-                        st.success(f"🎯 **APUESTA RECOMENDADA (UNDER {linea_ou_api}):** Consenso de modelos con **{prob_under}%** de efectividad (Supera tu filtro del {min_prob_filtro}%).")
-                    else:
-                        st.warning(f"⚠️ **DESCARTADO:** No cumple con el filtro mínimo del {min_prob_filtro}% de efectividad o los motores discrepan.")
+                if "OVER" in resultado_qb["Recomendacion"]:
+                    st.info(f"💡 **Recomendación:** Alta probabilidad de superar la línea. Apuntar al **{resultado_qb['Recomendacion']}**.")
+                elif "UNDER" in resultado_qb["Recomendacion"]:
+                    st.info(f"💡 **Recomendación:** Tendencia a la baja. Apuntar al **{resultado_qb['Recomendacion']}**.")
+                else:
+                    st.warning("⚠️ Sin valor estadístico claro en esta línea de yardas.")
 
-            st.write("---")
-            st.success(f"🎯 **Escaneo finalizado.** Se encontraron **{oportunidades_encontradas} apuestas de alto valor** que superan tu filtro del {min_prob_filtro}%.")
+# ==========================================
+# 3. PESTAÑA: POWER RANKING ELO
+# ==========================================
+with pestana_power:
+    st.markdown("### 📈 Power Ranking ELO Actualizado de la NFL")
+    st.write("El ELO evalúa el nivel de poder de los 32 equipos basado en sus victorias históricas y el margen de dominio.")
+    
+    ranking = motor_elo_global.obtener_power_ranking()
+    df_ranking = pd.DataFrame(ranking, columns=["Equipo", "Rating ELO"])
+    df_ranking['Rating ELO'] = df_ranking['Rating ELO'].round(1)
+    df_ranking.index = range(1, len(df_ranking) + 1)
+    
+    st.dataframe(df_ranking, use_container_width=True)
