@@ -260,18 +260,21 @@ with pestana_escanner:
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
-                    # --- UNIFICACIÓN LÓGICA DE MARCADOR Y SPREAD ---
-                    score_dict = mc['Proyeccion_Score']
-                    equipos_sim = [k for k in score_dict.keys() if k != 'Total_Proyectado']
-                    eq_v_sim = equipos_sim[0] if len(equipos_sim) > 0 else away_code
-                    eq_l_sim = equipos_sim[1] if len(equipos_sim) > 1 else home_code
+                    # --- CÁLCULO DE SPREAD PURO (MONTECARLO + ML) ---
+                    # 1. Obtenemos la probabilidad exacta de las 1,000,000 de simulaciones de Montecarlo
+                    prob_mc_home = mc['Spread']['Cubre Local']
+                    prob_mc_away = mc['Spread']['Cubre Visita']
                     
-                    pts_local_proj = score_dict.get(eq_l_sim, 21.0)
-                    pts_visita_proj = score_dict.get(eq_v_sim, 21.0)
+                    # 2. Obtenemos la postura de Machine Learning
+                    margen_ml = ml['ML_Margen_Local_Esperado']
+                    # Si el margen proyectado por la IA más el spread es mayor a 0, la IA apoya al local
+                    ml_apoya_local = (margen_ml + spread_api) > 0 
                     
-                    margen_simulado = pts_local_proj - pts_visita_proj
-                    diferencia_spread = margen_simulado + spread_api
-                    prob_cover_home = round(min(95.0, max(5.0, 50.0 + (diferencia_spread * 7.5))), 1)
+                    # 3. Consenso: Usamos la probabilidad matemática exacta de Montecarlo, 
+                    # pero le damos una bonificación/penalización si Machine Learning está de acuerdo.
+                    ajuste_ml = 2.5 if ml_apoya_local else -2.5
+                    
+                    prob_cover_home = round(min(95.0, max(5.0, prob_mc_home + ajuste_ml)), 1)
                     prob_cover_away = round(100.0 - prob_cover_home, 1)
 
                     # 1. EVALUAR GANADOR (MONEYLINE) CON FILTRO EV+ PROFESIONAL (+5% a +25%)
