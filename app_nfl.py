@@ -131,7 +131,6 @@ with pestana_escanner:
                 ml_engine = PredictorNFL_ML()
                 ml_engine.entrenar(df_games, df_qbs)
                 
-                # Lista para recolectar las apuestas recomendadas y mostrarlas arriba
                 apuestas_destacadas = []
                 detalles_juegos = []
                 
@@ -190,15 +189,23 @@ with pestana_escanner:
                 st.write("---")
                 st.markdown("### 📋 Desglose Completo de la Jornada")
                 
-                # Renderizar los expanders con el detalle de cada partido
+                # Renderizar los expanders con el detalle limpio de cada partido
                 for d in detalles_juegos:
                     clima_str = "🏠 Domo" if d["is_dome"] else f"🌡️ {d['temp']}°F 💨 {d['wind']}mph"
                     with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Estado: {d['veredicto']}"):
                         col_d1, col_d2 = st.columns(2)
                         with col_d1:
                             st.markdown("**📊 Montecarlo & ELO**")
-                            st.write(f"- Proyección Score: **{d['mc']['Proyeccion_Score']}**")
-                            st.write(f"- Total Proyectado: **{d['mc']['Proyeccion_Score']['Total_Proyectado']} pts**")
+                            score_dict = d['mc']['Proyeccion_Score']
+                            equipos_en_juego = [k for k in score_dict.keys() if k != 'Total_Proyectado']
+                            eq_visita_j = equipos_en_juego[0] if len(equipos_en_juego) > 0 else 'Visita'
+                            eq_local_j = equipos_en_juego[1] if len(equipos_en_juego) > 1 else 'Local'
+                            
+                            p_visita = score_dict.get(eq_visita_j, 0)
+                            p_local = score_dict.get(eq_local_j, 0)
+                            
+                            st.write(f"- Proyección Score: **{eq_visita_j} {p_visita} - {p_local} {eq_local_j}**")
+                            st.write(f"- Total Proyectado: **{score_dict.get('Total_Proyectado', 0)} pts**")
                             st.write(f"- Prob. Victoria ELO: **{round(d['prob_elo'], 1)}%**")
                             st.write(f"- Prob. Over / Under: **{d['mc']['Over_Under']['Prob Over']}% / {d['mc']['Over_Under']['Prob Under']}%**")
                         with col_d2:
