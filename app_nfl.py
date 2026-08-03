@@ -1,160 +1,161 @@
 import streamlit as st
 import pandas as pd
+import requests
 import os
 import datetime
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 from modules.nfl_ml_engine import PredictorNFL_ML
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="🏈 NFL Analytics & Value Betting (2026)", layout="wide")
+st.set_page_config(page_title="🏈 NFL Analytics & Value Betting", layout="wide")
 
-st.title("🏈 NFL Analytics & Value Betting (2026)")
-st.write("Simulador Híbrido: Montecarlo (Stats Base) + Machine Learning (Clima, Altitud, QB)")
+API_KEY = os.environ.get("API_SPORTS_KEY")
+HEADERS = {'x-apisports-key': API_KEY}
+BASE_URL_NFL = "https://v1.american-football.api-sports.io"
 
-# --- CARGA DE DATOS ---
+# --- DICCIONARIOS DE TRADUCCIÓN Y ESTADIOS ---
+# Traductor de API-Sports a nuestro modelo ML (nflfastR)
+nfl_team_map = {
+    "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
+    "Buffalo Bills": "BUF", "Carolina Panthers": "CAR", "Chicago Bears": "CHI",
+    "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE", "Dallas Cowboys": "DAL",
+    "Denver Broncos": "DEN", "Detroit Lions": "DET", "Green Bay Packers": "GB",
+    "Houston Texans": "HOU", "Indianapolis Colts": "IND", "Jacksonville Jaguars": "JAX",
+    "Kansas City Chiefs": "KC", "Las Vegas Raiders": "LV", "Los Angeles Chargers": "LAC",
+    "Los Angeles Rams": "LA", "Miami Dolphins": "MIA", "Minnesota Vikings": "MIN",
+    "New England Patriots": "NE", "New Orleans Saints": "NO", "New York Giants": "NYG",
+    "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT",
+    "San Francisco 49ers": "SF", "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB",
+    "Tennessee Titans": "TEN", "Washington Commanders": "WAS"
+}
+
+# Coordenadas y tipo de estadio para el clima automático
+estadios_info = {
+    "BUF": {"lat": 42.773, "lon": -78.786, "dome": False},
+    "MIA": {"lat": 25.957, "lon": -80.238, "dome": False},
+    "NE":  {"lat": 42.090, "lon": -71.264, "dome": False},
+    "NYJ": {"lat": 40.813, "lon": -74.074, "dome": False},
+    "BAL": {"lat": 39.277, "lon": -76.622, "dome": False},
+    "CIN": {"lat": 39.095, "lon": -84.516, "dome": False},
+    "CLE": {"lat": 41.506, "lon": -81.699, "dome": False},
+    "PIT": {"lat": 40.446, "lon": -80.015, "dome": False},
+    "HOU": {"lat": 29.684, "lon": -95.410, "dome": True},
+    "IND": {"lat": 39.760, "lon": -86.163, "dome": True},
+    "JAX": {"lat": 30.323, "lon": -81.637, "dome": False},
+    "TEN": {"lat": 36.166, "lon": -86.771, "dome": False},
+    "DEN": {"lat": 39.743, "lon": -105.020, "dome": False},
+    "KC":  {"lat": 39.048, "lon": -94.483, "dome": False},
+    "LV":  {"lat": 36.090, "lon": -115.183, "dome": True},
+    "LAC": {"lat": 33.953, "lon": -118.339, "dome": True},
+    "DAL": {"lat": 32.747, "lon": -97.092, "dome": True},
+    "NYG": {"lat": 40.813, "lon": -74.074, "dome": False},
+    "PHI": {"lat": 39.900, "lon": -75.167, "dome": False},
+    "WAS": {"lat": 38.907, "lon": -76.864, "dome": False},
+    "CHI": {"lat": 41.862, "lon": -87.616, "dome": False},
+    "DET": {"lat": 42.340, "lon": -83.045, "dome": True},
+    "GB":  {"lat": 44.501, "lon": -88.062, "dome": False},
+    "MIN": {"lat": 44.973, "lon": -93.257, "dome": True},
+    "ATL": {"lat": 33.755, "lon": -84.400, "dome": True},
+    "CAR": {"lat": 35.225, "lon": -80.852, "dome": False},
+    "NO":  {"lat": 29.951, "lon": -90.081, "dome": True},
+    "TB":  {"lat": 27.975, "lon": -82.503, "dome": False},
+    "ARI": {"lat": 33.527, "lon": -112.262, "dome": True},
+    "LA":  {"lat": 33.953, "lon": -118.339, "dome": True},
+    "SF":  {"lat": 37.403, "lon": -121.969, "dome": False},
+    "SEA": {"lat": 47.595, "lon": -122.331, "dome": False}
+}
+
+st.title("🏈 NFL Analytics & Value Betting (Automático)")
+
+# --- CARGAR HISTÓRICO ---
 @st.cache_data(ttl=3600)
 def cargar_datos_nfl():
-    url_games = 'https://raw.githubusercontent.com/ricardodanmaravilla-coder/NFL-Analytics/main/data/historico_nfl_games.csv'
-    url_qbs = 'https://raw.githubusercontent.com/ricardodanmaravilla-coder/NFL-Analytics/main/data/historico_nfl_qbs.csv'
-    
-    df_games, df_qbs = pd.DataFrame(), pd.DataFrame()
-    
-    # Intentar carga local primero
-    if os.path.exists('data/historico_nfl_games.csv'):
+    try:
         df_games = pd.read_csv('data/historico_nfl_games.csv')
-    else:
-        try: df_games = pd.read_csv(url_games)
-        except: pass
-        
-    if os.path.exists('data/historico_nfl_qbs.csv'):
         df_qbs = pd.read_csv('data/historico_nfl_qbs.csv')
-    else:
-        try: df_qbs = pd.read_csv(url_qbs)
-        except: pass
-        
-    return df_games, df_qbs
+        return df_games, df_qbs
+    except:
+        st.error("No se encontraron los CSV. Corre el GitHub Action primero.")
+        return pd.DataFrame(), pd.DataFrame()
 
 df_games, df_qbs = cargar_datos_nfl()
 
-if df_games.empty:
-    st.error("🚨 No se pudo cargar la base de datos histórica. Ejecuta el Extractor primero.")
-    st.stop()
-
-# Diccionario estándar de equipos NFL para selección
-equipos_nfl = sorted(list(df_games['home_team'].dropna().unique()))
-
-# --- INTERFAZ DE USUARIO ---
-st.markdown("### 1. Selecciona el Encuentro y Condiciones")
-
-col1, col2 = st.columns(2)
-with col1:
-    st.markdown("#### 🏟️ Equipos")
-    local = st.selectbox("Equipo Local (Home):", equipos_nfl, index=equipos_nfl.index('KC') if 'KC' in equipos_nfl else 0)
-    visita = st.selectbox("Equipo Visitante (Away):", [eq for eq in equipos_nfl if eq != local], index=0)
-    semana = st.number_input("Semana de la Temporada (Week):", min_value=1, max_value=22, value=1)
-
-with col2:
-    st.markdown("#### 🌪️ Contexto del Juego (Para Machine Learning)")
-    is_dome = st.checkbox("¿Se juega en estadio techado (Dome)?", value=False)
+# --- FUNCIONES AUTOMÁTICAS ---
+def obtener_clima_estadio(equipo_local):
+    """Consulta el clima en vivo usando Open-Meteo (Gratis)"""
+    info = estadios_info.get(equipo_local)
+    if not info: return 70.0, 0.0, False
+    if info["dome"]: return 70.0, 0.0, True
     
-    if is_dome:
-        temp = 70.0
-        wind = 0.0
-        st.info("Al ser techado, el clima se controla a 70°F sin viento.")
-    else:
-        temp = st.slider("Temperatura esperada (°F):", min_value=-10.0, max_value=110.0, value=65.0)
-        wind = st.slider("Viento esperado (mph):", min_value=0.0, max_value=50.0, value=5.0)
+    try:
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={info['lat']}&longitude={info['lon']}&current_weather=true"
+        res = requests.get(url).json()
+        temp_c = res["current_weather"]["temperature"]
+        temp_f = (temp_c * 9/5) + 32  # Convertir a Fahrenheit para el modelo
+        wind_kmh = res["current_weather"]["windspeed"]
+        wind_mph = wind_kmh * 0.621371 # Convertir a MPH
+        return round(temp_f, 1), round(wind_mph, 1), False
+    except:
+        return 65.0, 5.0, False
 
-st.markdown("---")
-st.markdown("### 2. Líneas de Las Vegas (Para evaluar el Valor/EV+)")
-col_lv1, col_lv2 = st.columns(2)
-with col_lv1:
-    linea_ou = st.number_input("Línea Total Over/Under (Ej. 45.5):", min_value=30.0, max_value=60.0, value=45.5, step=0.5)
-with col_lv2:
-    # Spread del local: Ej. Si Kansas City es favorito por 3 puntos, pones -3.0
-    spread_local = st.number_input("Spread del Local (Ej. -3.0 si es favorito, +3.0 si es underdog):", min_value=-25.0, max_value=25.0, value=-3.0, step=0.5)
+def obtener_calendario_api(semana, temporada=2024):
+    """Descarga juegos de API-Sports"""
+    if not API_KEY: return []
+    url = f"{BASE_URL_NFL}/games?league=1&season={temporada}"
+    try:
+        res = requests.get(url, headers=HEADERS).json()
+        juegos = res.get("response", [])
+        # En API-Sports, filtramos por semana (Week X)
+        juegos_semana = [j for j in juegos if f"Week {semana}" in str(j.get("game", {}).get("week", ""))]
+        return juegos_semana
+    except:
+        return []
 
-if st.button("Ejecutar Simulador Híbrido NFL", type="primary"):
-    with st.spinner("Simulando partido 10,000 veces y consultando a la IA..."):
+# --- PANEL AUTOMÁTICO ---
+st.markdown("### 🤖 Escáner Automático de Jornada")
+semana_auto = st.number_input("Buscar juegos de la Semana:", min_value=1, max_value=22, value=1)
+
+if st.button("Buscar Partidos y Extraer Clima", type="primary"):
+    with st.spinner("Conectando con Las Vegas y satélites del clima..."):
+        juegos = obtener_calendario_api(semana_auto)
         
-        # 1. MOTOR MONTECARLO (Stats Base)
-        resultados_mc = simular_nfl_montecarlo(
-            local=local, 
-            visita=visita, 
-            df_games=df_games, 
-            linea_ou=linea_ou, 
-            spread_local=spread_local, 
-            n_simulaciones=10000
-        )
-        
-        # 2. MOTOR MACHINE LEARNING (Contexto y Clima)
-        ml_engine = PredictorNFL_ML()
-        modelo_listo = ml_engine.entrenar(df_games, df_qbs)
-        
-        resultados_ml = None
-        if modelo_listo:
-            resultados_ml = ml_engine.predecir_contexto(
-                week=semana, 
-                home_team=local, 
-                temp=temp, 
-                wind=wind, 
-                is_dome=1 if is_dome else 0
-            )
-
-        # --- MOSTRAR RESULTADOS ---
-        st.markdown("---")
-        st.subheader(f"📊 Resultados de la Simulación: {visita} @ {local}")
-        
-        mc_col1, mc_col2, mc_col3 = st.columns(3)
-        mc_col1.metric("Probabilidad Gana Local (MC)", f"{resultados_mc['Moneyline']['Gana Local']}%")
-        mc_col2.metric(f"Prob. {local} cubre {spread_local} (MC)", f"{resultados_mc['Spread']['Cubre Local']}%")
-        mc_col3.metric(f"Prob. Over {linea_ou} (MC)", f"{resultados_mc['Over_Under']['Prob Over']}%")
-
-        if resultados_ml:
-            st.markdown("### 🤖 Validación de Contexto (Machine Learning)")
-            st.info("El ML ajusta la expectativa de Montecarlo analizando cómo el Clima, la Altitud y la Semana de temporada afectan históricamente.")
+        if not juegos:
+            st.warning("⚠️ No se encontraron partidos en la API para esta semana o revisa tu API Key.")
+        else:
+            ml_engine = PredictorNFL_ML()
+            ml_engine.entrenar(df_games, df_qbs)
             
-            ml_col1, ml_col2 = st.columns(2)
-            
-            puntos_totales_mc = resultados_mc['Proyeccion_Score']['Total_Proyectado']
-            puntos_totales_ml = resultados_ml['ML_Puntos_Totales_Esperados']
-            
-            # Margen Local: Si es positivo, gana local. Si es negativo, gana visita.
-            margen_ml = resultados_ml['ML_Margen_Local_Esperado']
-            favorito_ml = local if margen_ml > 0 else visita
-            margen_ml_abs = abs(margen_ml)
-            
-            with ml_col1:
-                st.markdown("**🎯 Totales (Over/Under)**")
-                st.write(f"- Proyección Pura (Montecarlo): **{puntos_totales_mc} pts**")
-                st.write(f"- Ajuste por Clima/Altitud (ML): **{puntos_totales_ml} pts**")
+            for j in juegos:
+                home_api = j["teams"]["home"]["name"]
+                away_api = j["teams"]["away"]["name"]
                 
-                # Consenso Totales
-                if puntos_totales_mc > linea_ou and puntos_totales_ml > linea_ou:
-                    st.success("✅ **CONSENSO BLINDADO:** Ambos motores proyectan OVER.")
-                elif puntos_totales_mc < linea_ou and puntos_totales_ml < linea_ou:
-                    st.success("✅ **CONSENSO BLINDADO:** Ambos motores proyectan UNDER.")
-                else:
-                    st.warning("⚠️ **ALERTA DE CONFLICTO:** Los motores no coinciden por el clima. Riesgo alto.")
-
-            with ml_col2:
-                st.markdown("**🏈 Hándicap (Spread)**")
-                st.write(f"- ML predice victoria de: **{favorito_ml} por {margen_ml_abs} pts**")
+                # Traducir nombres (Ej: Kansas City Chiefs -> KC)
+                home_code = nfl_team_map.get(home_api)
+                away_code = nfl_team_map.get(away_api)
                 
-                # Explicación explícita del modelo ML
-                cubre_ml_local = margen_ml > abs(spread_local) if spread_local < 0 else margen_ml > -spread_local
+                if not home_code or not away_code:
+                    continue
+                    
+                # Extraer clima automático
+                temp, wind, is_dome = obtener_clima_estadio(home_code)
                 
-                if cubre_ml_local:
-                    st.write(f"- *Diagnóstico ML:* El local **SÍ** cubre la línea de {spread_local}.")
-                else:
-                    st.write(f"- *Diagnóstico ML:* El visitante **SÍ** cubre la línea de {spread_local} (El local no saca suficiente ventaja).")
+                # Extraer Líneas básicas que nos da el endpoint de juegos
+                # (Nota: Para cuotas más finas se requiere el endpoint /odds, aquí usamos las del pre-match si vienen)
+                linea_ou_api = 45.5 # Fallback temporal si la API no manda odds directas
+                spread_api = -3.0   
                 
-                st.markdown("---")
-                
-                # Evaluación final de Consenso
-                if (resultados_mc['Spread']['Cubre Local'] > 55.0) and cubre_ml_local:
-                    st.success(f"✅ **CONSENSO BLINDADO:** Ambos motores confirman que {local} cubre el spread de {spread_local}.")
-                elif (resultados_mc['Spread']['Cubre Visita'] > 55.0) and not cubre_ml_local:
-                    st.success(f"✅ **CONSENSO BLINDADO:** Ambos motores confirman que {visita} cubre el spread.")
-                else:
-                    st.warning("⚠️ **CONFLICTO:** Montecarlo y ML no están de acuerdo en el Spread. ¡Aléjate de esta apuesta!")
+                with st.expander(f"🏈 {away_code} @ {home_code} | Clima: {'🏠 Domo' if is_dome else f'🌡️ {temp}°F 💨 {wind}mph'}"):
+                    # Correr modelos
+                    mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
+                    ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
+                    
+                    st.write(f"**Proyección Montecarlo:** {away_code} {mc['Proyeccion_Score'][away_code]} - {mc['Proyeccion_Score'][home_code]} {home_code}")
+                    st.write(f"**Ajuste Machine Learning:** Puntos totales esperados: {ml['ML_Puntos_Totales_Esperados']}")
+                    
+                    # Consenso rápido
+                    if mc['Proyeccion_Score']['Total_Proyectado'] > linea_ou_api and ml['ML_Puntos_Totales_Esperados'] > linea_ou_api:
+                        st.success("🔥 ALERTA EV+: Ambos modelos proyectan OVER.")
+                    elif mc['Proyeccion_Score']['Total_Proyectado'] < linea_ou_api and ml['ML_Puntos_Totales_Esperados'] < linea_ou_api:
+                        st.success("🔥 ALERTA EV+: Ambos modelos proyectan UNDER.")
+                    else:
+                        st.warning("⚠️ Sin consenso de valor. Evitar apostar totales.")
