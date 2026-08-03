@@ -13,23 +13,7 @@ API_KEY = os.environ.get("API_SPORTS_KEY")
 HEADERS = {'x-apisports-key': API_KEY}
 BASE_URL_NFL = "https://v1.american-football.api-sports.io"
 
-# --- DICCIONARIOS DE TRADUCCIÓN Y ESTADIOS ---
-# Traductor de API-Sports a nuestro modelo ML (nflfastR)
-nfl_team_map = {
-    "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
-    "Buffalo Bills": "BUF", "Carolina Panthers": "CAR", "Chicago Bears": "CHI",
-    "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE", "Dallas Cowboys": "DAL",
-    "Denver Broncos": "DEN", "Detroit Lions": "DET", "Green Bay Packers": "GB",
-    "Houston Texans": "HOU", "Indianapolis Colts": "IND", "Jacksonville Jaguars": "JAX",
-    "Kansas City Chiefs": "KC", "Las Vegas Raiders": "LV", "Los Angeles Chargers": "LAC",
-    "Los Angeles Rams": "LA", "Miami Dolphins": "MIA", "Minnesota Vikings": "MIN",
-    "New England Patriots": "NE", "New Orleans Saints": "NO", "New York Giants": "NYG",
-    "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT",
-    "San Francisco 49ers": "SF", "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB",
-    "Tennessee Titans": "TEN", "Washington Commanders": "WAS"
-}
-
-# Coordenadas y tipo de estadio para el clima automático
+# --- COORDENADAS Y TIPO DE ESTADIO PARA EL CLIMA ---
 estadios_info = {
     "BUF": {"lat": 42.773, "lon": -78.786, "dome": False},
     "MIA": {"lat": 25.957, "lon": -80.238, "dome": False},
@@ -91,22 +75,19 @@ def obtener_clima_estadio(equipo_local):
         url = f"https://api.open-meteo.com/v1/forecast?latitude={info['lat']}&longitude={info['lon']}&current_weather=true"
         res = requests.get(url).json()
         temp_c = res["current_weather"]["temperature"]
-        temp_f = (temp_c * 9/5) + 32  # Convertir a Fahrenheit para el modelo
+        temp_f = (temp_c * 9/5) + 32  # Fahrenheit para el modelo
         wind_kmh = res["current_weather"]["windspeed"]
-        wind_mph = wind_kmh * 0.621371 # Convertir a MPH
+        wind_mph = wind_kmh * 0.621371 # Millas por hora (MPH)
         return round(temp_f, 1), round(wind_mph, 1), False
     except:
         return 65.0, 5.0, False
 
-# --- NUEVA FUNCIÓN DE CALENDARIO LOCAL / OFICIAL ---
 def obtener_calendario_nfl(temporada, semana):
-    """Obtiene los partidos de la semana directamente de nuestra base de datos local"""
+    """Obtiene los partidos de la semana directamente de la base de datos oficial"""
     try:
-        # Filtramos los juegos del año y semana seleccionados
         juegos_temp = df_games[(df_games['season'] == temporada) & (df_games['week'] == semana)].copy()
         
         if juegos_temp.empty:
-            # Si el CSV local no tiene la semana (ej. partidos futuros nuevos), usamos nfl_data_py al vuelo
             import nfl_data_py as nfl
             df_sched = nfl.import_schedules([temporada])
             juegos_temp = df_sched[(df_sched['season'] == temporada) & (df_sched['week'] == semana)].copy()
@@ -127,7 +108,6 @@ with col_auto2:
 
 if st.button("Buscar Partidos y Extraer Clima", type="primary"):
     with st.spinner("Consultando calendario oficial y satélites del clima..."):
-        # Obtenemos los partidos del DataFrame en lugar de la API externa
         juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
         
         if juegos_df.empty:
@@ -136,31 +116,28 @@ if st.button("Buscar Partidos y Extraer Clima", type="primary"):
             ml_engine = PredictorNFL_ML()
             ml_engine.entrenar(df_games, df_qbs)
             
-            # Iteramos sobre el DataFrame de partidos oficiales
             for _, j in juegos_df.iterrows():
-                # En nfl_data_py las columnas se llaman 'home_team' y 'away_team' (ya vienen en formato código ej. 'KC', 'BUF')
                 home_code = j.get("home_team")
                 away_code = j.get("away_team")
+                fecha_partido = str(j.get("gameday", "Fecha por confirmar"))
                 
                 if not home_code or not away_code:
                     continue
                     
-                # Extraer clima automático usando Open-Meteo
                 temp, wind, is_dome = obtener_clima_estadio(home_code)
                 
-                # Líneas base de Las Vegas (las podemos ajustar o dejar estándar para el escáner)
                 linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
                 spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                 
-                with st.expander(f"🏈 {away_code} @ {home_code} | Clima: {'🏠 Domo' if is_dome else f'🌡️ {temp}°F 💨 {wind}mph'}"):
-                    # Correr modelos híbridos
+                titulo_expander = f"📅 {fecha_partido} | 🏈 {away_code} @ {home_code} | Clima: {'🏠 Domo' if is_dome else f'🌡️ {temp}°F 💨 {wind}mph'}"
+                
+                with st.expander(titulo_expander):
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
                     ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
                     
                     st.write(f"**Proyección Montecarlo:** {away_code} {mc['Proyeccion_Score'][away_code]} - {mc['Proyeccion_Score'][home_code]} {home_code}")
                     st.write(f"**Ajuste Machine Learning:** Puntos totales esperados: {ml['ML_Puntos_Totales_Esperados']}")
                     
-                    # Consenso rápido de valor
                     if mc['Proyeccion_Score']['Total_Proyectado'] > linea_ou_api and ml['ML_Puntos_Totales_Esperados'] > linea_ou_api:
                         st.success("🔥 ALERTA EV+: Ambos modelos proyectan OVER.")
                     elif mc['Proyeccion_Score']['Total_Proyectado'] < linea_ou_api and ml['ML_Puntos_Totales_Esperados'] < linea_ou_api:
