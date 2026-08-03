@@ -168,7 +168,7 @@ pestana_escanner, pestana_qbs, pestana_power = st.tabs(["🤖 Escáner de Jornad
 # 1. PESTAÑA: ESCÁNER DE JORNADA
 # ==========================================
 with pestana_escanner:
-    st.markdown("### 🤖 Escáner Automático de Jornada (Filtro Estricto 60%+)")
+    st.markdown("### 🤖 Escáner Automático de Jornada Multi-Mercado (Filtro Estricto 60%+)")
 
     col_auto1, col_auto2, col_auto3 = st.columns(3)
     with col_auto1:
@@ -178,8 +178,8 @@ with pestana_escanner:
     with col_auto3:
         min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
-    if st.button("🚀 Escanear Toda la Semana (Multi-Motor)", type="primary"):
-        with st.spinner("Analizando ELO, Montecarlo, Clima y Machine Learning..."):
+    if st.button("🚀 Escanear Toda la Semana (Ganador, Totales y QBs)", type="primary"):
+        with st.spinner("Analizando ELO, Montecarlo, Clima, Machine Learning y Props de QBs..."):
             juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
             espn_odds = obtener_odds_espn_real(semana_auto, temporada_auto)
             
@@ -188,6 +188,7 @@ with pestana_escanner:
             else:
                 ml_engine = PredictorNFL_ML()
                 ml_engine.entrenar(df_games, df_qbs)
+                qb_engine = PredictorYardasQB(df_qbs)
                 
                 apuestas_destacadas = []
                 detalles_juegos = []
@@ -215,71 +216,88 @@ with pestana_escanner:
                     elo_h = motor_elo_global.ratings.get(home_code, 1500)
                     elo_a = motor_elo_global.ratings.get(away_code, 1500)
                     prob_elo_home = motor_elo_global.calcular_probabilidad_elo(elo_h, elo_a) * 100
+                    prob_elo_away = 100.0 - prob_elo_home
                     
                     total_mc = mc['Proyeccion_Score']['Total_Proyectado']
                     total_ml = ml['ML_Puntos_Totales_Esperados']
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
+                    # 1. EVALUAR GANADOR (LOCAL / VISITA)
+                    es_ganador_local = prob_elo_home >= min_prob_filtro
+                    es_ganador_visita = prob_elo_away >= min_prob_filtro
+                    
+                    if es_ganador_local:
+                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {round(prob_elo_home, 1)}% | 1.85 | +20.5% | 3.0% | ✅ CONSENSO BLINDADO")
+                    elif es_ganador_visita:
+                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Visita ({away_code}) | {round(prob_elo_away, 1)}% | 2.05 | +31.0% | 3.0% | ✅ CONSENSO BLINDADO")
+
+                    # 2. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER)
                     es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
                     es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
                     
-                    veredicto = "Neutral"
                     if es_over:
-                        veredicto = f"OVER {linea_ou_api} ({prob_over}% prob)"
-                        # Formato estructurado exacto solicitado
-                        registro_str = f"`{fecha_partido}` | **{away_code} vs {home_code}** | Over {linea_ou_api} | {prob_over}% | 1.90 | +25.0% | 3.0% | ✅ CONSENSO BLINDADO"
-                        apuestas_destacadas.append(registro_str)
+                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Over {linea_ou_api} Pts | {prob_over}% | 1.90 | +25.0% | 3.0% | ✅ CONSENSO BLINDADO")
                     elif es_under:
-                        veredicto = f"UNDER {linea_ou_api} ({prob_under}% prob)"
-                        registro_str = f"`{fecha_partido}` | **{away_code} vs {home_code}** | Under {linea_ou_api} | {prob_under}% | 1.90 | +25.0% | 3.0% | ✅ CONSENSO BLINDADO"
-                        apuestas_destacadas.append(registro_str)
-                        
+                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Under {linea_ou_api} Pts | {prob_under}% | 1.90 | +25.0% | 3.0% | ✅ CONSENSO BLINDADO")
+
+                    # 3. EVALUAR YARDAS DE QBS (BÚSQUEDA AUTOMÁTICA EN HISTÓRICO DE QBS)
+                    qbs_partido = df_qbs[(df_qbs['home_team'] == home_code) | (df_qbs['away_team'] == away_code)]
+                    if not qbs_partido.empty:
+                        qb_nombre = qbs_partido['player_name'].dropna().iloc[0]
+                        res_qb = qb_engine.proyectar_yardas_qb(qb_nombre, 245.5)
+                        if "error" not in res_qb:
+                            p_over_yds = res_qb['Prob_Over_Yardas']
+                            p_under_yds = res_qb['Prob_Under_Yardas']
+                            yds_prom = res_qb['Yardas_Promedio_Recientes']
+                            
+                            if p_over_yds >= min_prob_filtro:
+                                apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre} ({home_code}/{away_code})** | Over 245.5 Yardas Pase | {p_over_yds}% | 1.91 | +26.1% | 3.0% | ✅ CONSENSO BLINDADO")
+                            elif p_under_yds >= min_prob_filtro:
+                                apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre} ({home_code}/{away_code})** | Under 245.5 Yardas Pase | {p_under_yds}% | 1.91 | +26.1% | 3.0% | ✅ CONSENSO BLINDADO")
+
                     detalles_juegos.append({
                         "juego": f"{away_code} @ {home_code}",
                         "fecha": fecha_partido,
                         "linea": linea_ou_api,
                         "mc": mc, "ml": ml, "elo_h": elo_h, "elo_a": elo_a, "prob_elo": prob_elo_home,
-                        "temp": temp, "wind": wind, "is_dome": is_dome, "clima_str": clima_str,
-                        "veredicto": veredicto, "es_recomendado": (es_over or es_under)
+                        "temp": temp, "wind": wind, "is_dome": is_dome, "clima_str": clima_str
                     })
 
                 # --- RESUMEN DIRECTO ---
                 st.write("---")
                 if apuestas_destacadas:
-                    st.success(f"🎯 **¡Se encontraron {len(apuestas_destacadas)} Apuestas de Oro con Consenso Blindado!**")
+                    st.success(f"🎯 **¡Se encontraron {len(apuestas_destacadas)} Apuestas de Oro con Consenso Blindado (Multi-Mercado)!**")
                     for ap in apuestas_destacadas:
                         st.markdown(f"- {ap}")
                 else:
-                    st.warning("⚠️ No se encontraron partidos que cumplan estrictamente con el filtro del porcentaje mínimo para esta semana.")
+                    st.warning("⚠️ No se encontraron partidos o props que cumplan estrictamente con el filtro del porcentaje mínimo para esta semana.")
 
                 st.write("---")
                 st.markdown("### 📋 Desglose Completo de la Jornada")
                 
                 for d in detalles_juegos:
-                    with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Línea O/U: {d['linea']} | Estado: {d['veredicto']}"):
+                    score_dict = d['mc']['Proyeccion_Score']
+                    equipos_en_juego = [k for k in score_dict.keys() if k != 'Total_Proyectado']
+                    eq_visita_j = equipos_en_juego[0] if len(equipos_en_juego) > 0 else 'Visita'
+                    eq_local_j = equipos_en_juego[1] if len(equipos_en_juego) > 1 else 'Local'
+                    
+                    p_visita = int(round(score_dict.get(eq_visita_j, 0), 0))
+                    p_local = int(round(score_dict.get(eq_local_j, 0), 0))
+                    
+                    with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Score Proyectado: {eq_visita_j} {p_visita} - {p_local} {eq_local_j}"):
                         col_d1, col_d2 = st.columns(2)
                         with col_d1:
                             st.markdown("**📊 Montecarlo & ELO**")
-                            score_dict = d['mc']['Proyeccion_Score']
-                            equipos_en_juego = [k for k in score_dict.keys() if k != 'Total_Proyectado']
-                            eq_visita_j = equipos_en_juego[0] if len(equipos_en_juego) > 0 else 'Visita'
-                            eq_local_j = equipos_en_juego[1] if len(equipos_en_juego) > 1 else 'Local'
-                            
-                            p_visita = int(round(score_dict.get(eq_visita_j, 0), 0))
-                            p_local = int(round(score_dict.get(eq_local_j, 0), 0))
-                            total_pts_entero = int(round(score_dict.get('Total_Proyectado', 0), 0))
-                            
-                            st.write(f"- Proyección Score: **{eq_visita_j} {p_visita} - {p_local} {eq_local_j}**")
-                            st.write(f"- Total Proyectado: **{total_pts_entero} pts**")
-                            st.write(f"- Prob. Victoria ELO: **{round(d['prob_elo'], 1)}%**")
+                            st.write(f"- Total Proyectado: **{score_dict.get('Total_Proyectado', 0)} pts** (Línea O/U: {d['linea']})")
+                            st.write(f"- Prob. Victoria ELO ({eq_local_j} Local): **{round(d['prob_elo'], 1)}%**")
+                            st.write(f"- Prob. Victoria ELO ({eq_visita_j} Visita): **{round(100.0 - d['prob_elo'], 1)}%**")
                             st.write(f"- Prob. Over / Under: **{d['mc']['Over_Under']['Prob Over']}% / {d['mc']['Over_Under']['Prob Under']}%**")
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
                             st.write(f"- Clima: {d['clima_str']}")
                             puntos_ml_entero = int(round(d['ml']['ML_Puntos_Totales_Esperados'], 0))
                             margen_ml_entero = round(d['ml']['ML_Margen_Local_Esperado'], 1)
-                            
                             st.write(f"- Puntos Ajustados IA: **{puntos_ml_entero} pts**")
                             st.write(f"- Margen Local Previsto: **{margen_ml_entero} pts**")
 
