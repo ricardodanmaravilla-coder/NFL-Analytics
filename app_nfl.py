@@ -241,8 +241,13 @@ with pestana_escanner:
                     elif es_under:
                         apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Under {linea_ou_api} Pts | {prob_under}% | 1.90 | +25.0% | 3.0% | ✅ CONSENSO BLINDADO")
 
-                    # 3. EVALUAR YARDAS DE QBS (BÚSQUEDA AUTOMÁTICA EN HISTÓRICO DE QBS)
-                    qbs_partido = df_qbs[(df_qbs['home_team'] == home_code) | (df_qbs['away_team'] == away_code)]
+                    # 3. EVALUAR YARDAS DE QBS (BÚSQUEDA SEGURA)
+                    if 'home_team' in df_qbs.columns and 'away_team' in df_qbs.columns:
+                        qbs_partido = df_qbs[(df_qbs['home_team'] == home_code) | (df_qbs['away_team'] == away_code)]
+                    elif 'posteam' in df_qbs.columns:
+                        qbs_partido = df_qbs[(df_qbs['posteam'] == home_code) | (df_qbs['posteam'] == away_code)]
+                    else:
+                        qbs_partido = pd.DataFrame()
                     if not qbs_partido.empty:
                         qb_nombre = qbs_partido['player_name'].dropna().iloc[0]
                         res_qb = qb_engine.proyectar_yardas_qb(qb_nombre, 245.5)
