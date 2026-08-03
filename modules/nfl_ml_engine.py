@@ -11,11 +11,8 @@ class PredictorNFL_ML:
         self.modelo_margen = RandomForestRegressor(n_estimators=100, random_state=42, max_depth=10)
         self.is_trained = False
         
-        # Diccionarios dinámicos para almacenar el poder ofensivo y defensivo real por equipo
-        self.power_off_home = {}
-        self.power_def_home = {}
-        self.power_off_away = {}
-        self.power_def_away = {}
+        self.power_off = {}
+        self.power_def = {}
         
         # Mapa de altitud de estadios (en pies)
         self.altitud_estadios = {
@@ -30,13 +27,12 @@ class PredictorNFL_ML:
         away_off = df_games.groupby('away_team')['away_score'].mean().to_dict()
         away_def = df_games.groupby('away_team')['home_score'].mean().to_dict()
         
-        # Combinar promedios globales por equipo (Local + Visita)
-rm = set(list(home_off.keys()) + list(away_off.keys()))
+        teams = set(list(home_off.keys()) + list(away_off.keys()))
         
         self.power_off = {}
         self.power_def = {}
         
-        for eq in rm:
+        for eq in teams:
             pts_a_favor = []
             pts_en_contra = []
             if eq in home_off: pts_a_favor.append(home_off[eq])
@@ -50,24 +46,19 @@ rm = set(list(home_off.keys()) + list(away_off.keys()))
     def _limpiar_y_preparar(self, df_games, df_qbs=None):
         df = df_games.copy()
         
-        # Calcular los poderes ofensivos y defensivos reales
         self._calcular_poderes_unidades(df)
         
-        # Asignar métricas de unidades al DataFrame de entrenamiento
         df['home_offense_power'] = df['home_team'].map(self.power_off).fillna(22.0)
         df['home_defense_power'] = df['home_team'].map(self.power_def).fillna(22.0)
         df['away_offense_power'] = df['away_team'].map(self.power_off).fillna(22.0)
         df['away_defense_power'] = df['away_team'].map(self.power_def).fillna(22.0)
         
-        # Variables contextuales de entorno
         df['home_altitude'] = df['home_team'].map(self.altitud_estadios).fillna(50)
         df['is_dome'] = df['roof'].apply(lambda x: 1 if str(x).lower() in ['dome', 'closed'] else 0)
         
-        # Targets
         df['margen_local'] = df['home_score'] - df['away_score']
         df['puntos_totales'] = df['home_score'] + df['away_score']
         
-        # Features completas incluyendo Enfrentamiento Ofensiva vs Defensiva Real
         features = [
             'week', 'home_altitude', 'temp', 'wind', 'is_dome',
             'home_offense_power', 'home_defense_power', 
