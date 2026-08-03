@@ -98,14 +98,14 @@ def obtener_clima_estadio(equipo_local):
     except:
         return 65.0, 5.0, False
 
-def obtener_calendario_api(semana, temporada=2024):
-    """Descarga juegos de API-Sports"""
+def obtener_calendario_api(semana, temporada):
+    """Descarga juegos de API-Sports basados en la temporada y semana indicadas"""
     if not API_KEY: return []
     url = f"{BASE_URL_NFL}/games?league=1&season={temporada}"
     try:
         res = requests.get(url, headers=HEADERS).json()
         juegos = res.get("response", [])
-        # En API-Sports, filtramos por semana (Week X)
+        # En API-Sports, filtramos por semana (Ej: "Week 1", "Preseason 1", etc.)
         juegos_semana = [j for j in juegos if f"Week {semana}" in str(j.get("game", {}).get("week", ""))]
         return juegos_semana
     except:
@@ -113,11 +113,17 @@ def obtener_calendario_api(semana, temporada=2024):
 
 # --- PANEL AUTOMÁTICO ---
 st.markdown("### 🤖 Escáner Automático de Jornada")
-semana_auto = st.number_input("Buscar juegos de la Semana:", min_value=1, max_value=22, value=1)
+
+col_auto1, col_auto2 = st.columns(2)
+with col_auto1:
+    temporada_auto = st.number_input("Temporada:", min_value=2020, max_value=2030, value=2026)
+with col_auto2:
+    semana_auto = st.number_input("Buscar juegos de la Semana:", min_value=1, max_value=22, value=1)
 
 if st.button("Buscar Partidos y Extraer Clima", type="primary"):
     with st.spinner("Conectando con Las Vegas y satélites del clima..."):
-        juegos = obtener_calendario_api(semana_auto)
+        # Ahora pasamos dinámicamente la temporada 2026 (o la que elijas)
+        juegos = obtener_calendario_api(semana_auto, temporada_auto)
         
         if not juegos:
             st.warning("⚠️ No se encontraron partidos en la API para esta semana o revisa tu API Key.")
