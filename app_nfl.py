@@ -109,7 +109,6 @@ def obtener_clima_estadio(equipo_local):
     return temp_base, viento_base, False
 
 def convertir_momio_americano_decimal(momio_str):
-    """Convierte un string de momio americano (ej. '-110' o '+150') a formato decimal de forma segura"""
     try:
         val = int(str(momio_str).replace("+", ""))
         if val > 0:
@@ -169,11 +168,15 @@ def obtener_odds_espn_real(semana, temporada=2026):
                 total_line = first_odds.get("overUnder", 45.5)
                 over_odds = first_odds.get("overOdds", "-110")
                 under_odds = first_odds.get("underOdds", "-110")
+                spread_line = first_odds.get("spread", -3.0)
+                spread_odds = first_odds.get("spreadOdds", "-110")
                 
                 odds_dict[home_code] = {
                     "total": float(total_line) if total_line else 45.5,
                     "over_odds": over_odds,
-                    "under_odds": under_odds
+                    "under_odds": under_odds,
+                    "spread": float(spread_line) if spread_line else -3.0,
+                    "spread_odds": spread_odds
                 }
     except:
         pass
@@ -199,7 +202,7 @@ pestana_escanner, pestana_qbs, pestana_power = st.tabs(["🤖 Escáner de Jornad
 # 1. PESTAÑA: ESCÁNER DE JORNADA
 # ==========================================
 with pestana_escanner:
-    st.markdown("### 🤖 Escáner Automático de Jornada Multi-Mercado (Filtro Estricto EV+)")
+    st.markdown("### 🤖 Escáner Automático de Jornada Multi-Mercado (Spread, Moneyline, Totales y QBs)")
 
     col_auto1, col_auto2, col_auto3 = st.columns(3)
     with col_auto1:
@@ -209,8 +212,8 @@ with pestana_escanner:
     with col_auto3:
         min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
-    if st.button("🚀 Escanear Jornada con Filtro EV+", type="primary"):
-        with st.spinner("Analizando valor esperado (EV+), ELO, Montecarlo y Líneas de Casino..."):
+    if st.button("🚀 Escanear Jornada con Handicap y EV+", type="primary"):
+        with st.spinner("Analizando hándicaps, valor esperado (EV+), ELO, Montecarlo y Líneas de Casino..."):
             juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
             espn_odds = obtener_odds_espn_real(semana_auto, temporada_auto)
             
@@ -240,7 +243,9 @@ with pestana_escanner:
                     if not linea_ou_api:
                         linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
                         
-                    spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
+                    spread_api = match_odds.get("spread")
+                    if spread_api is None:
+                        spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                     
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
                     ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
@@ -255,13 +260,16 @@ with pestana_escanner:
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
-                    # 1. EVALUAR GANADOR (LOCAL / VISITA) CON FILTRO EV+
+                    # Probabilidades de Spread (Handicap) extraídas del motor de Montecarlo
+                    prob_cover_home = mc.get('Spread', {}).get('Prob Cover Home', 52.0)
+                    prob_cover_away = mc.get('Spread', {}).get('Prob Cover Away', 48.0)
+
+                    # 1. EVALUAR GANADOR (MONEYLINE) CON EV+
                     if prob_elo_home >= min_prob_filtro:
                         p_val = round(prob_elo_home, 1)
                         momio_ml = convertir_prob_a_momio_americano(p_val)
                         dec_ml = convertir_momio_americano_decimal(momio_ml)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
-                        
                         if ev_val > 0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {p_val}% | {momio_ml} | +{ev_val}% | ✅ CONSENSO BLINDADO")
                             
@@ -270,11 +278,25 @@ with pestana_escanner:
                         momio_ml = convertir_prob_a_momio_americano(p_val)
                         dec_ml = convertir_momio_americano_decimal(momio_ml)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
-                        
                         if ev_val > 0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Visita ({away_code}) | {p_val}% | {momio_ml} | +{ev_val}% | ✅ CONSENSO BLINDADO")
 
-                    # 2. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER) CON FILTRO EV+
+                    # 2. EVALUAR HANDICAP / SPREAD CON FILTRO EV+
+                    momio_spread_raw = match_odds.get("spread_odds", "-110")
+                    dec_spread = convertir_momio_americano_decimal(momio_spread_raw)
+
+                    if prob_cover_home >= min_prob_filtro:
+                        ev_h_spread = round(((prob_cover_home / 100.0) * dec_spread - 1.0) * 100, 1)
+                        if ev_h_spread > 0:
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Local ({home_code} {spread_api}) | {prob_cover_home}% | {momio_spread_raw} | +{ev_h_spread}% | ✅ CONSENSO BLINDADO")
+
+                    if prob_cover_away >= min_prob_filtro:
+                        ev_a_spread = round(((prob_cover_away / 100.0) * dec_spread - 1.0) * 100, 1)
+                        if ev_a_spread > 0:
+                            spread_away_val = -spread_api if spread_api != 0 else 0.0
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Visita ({away_code} {spread_away_val:+}) | {prob_cover_away}% | {momio_spread_raw} | +{ev_a_spread}% | ✅ CONSENSO BLINDADO")
+
+                    # 3. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER) CON FILTRO EV+
                     es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
                     es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
                     
@@ -282,7 +304,6 @@ with pestana_escanner:
                         momio_o = match_odds.get("over_odds", "-110")
                         dec_o = convertir_momio_americano_decimal(momio_o)
                         ev_o = round(((prob_over / 100.0) * dec_o - 1.0) * 100, 1)
-                        
                         if ev_o > 0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Over {linea_ou_api} Pts | {prob_over}% | {momio_o} | +{ev_o}% | ✅ CONSENSO BLINDADO")
                             
@@ -290,11 +311,10 @@ with pestana_escanner:
                         momio_u = match_odds.get("under_odds", "-110")
                         dec_u = convertir_momio_americano_decimal(momio_u)
                         ev_u = round(((prob_under / 100.0) * dec_u - 1.0) * 100, 1)
-                        
                         if ev_u > 0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Under {linea_ou_api} Pts | {prob_under}% | {momio_u} | +{ev_u}% | ✅ CONSENSO BLINDADO")
 
-                    # 3. EVALUAR YARDAS DE QBS CON FILTRO EV+
+                    # 4. EVALUAR YARDAS DE QBS CON FILTRO EV+
                     if 'home_team' in df_qbs.columns and 'away_team' in df_qbs.columns:
                         qbs_partido = df_qbs[(df_qbs['home_team'] == home_code) | (df_qbs['away_team'] == away_code)]
                     elif 'posteam' in df_qbs.columns:
@@ -325,6 +345,7 @@ with pestana_escanner:
                         "juego": f"{away_code} @ {home_code}",
                         "fecha": fecha_partido,
                         "linea": linea_ou_api,
+                        "spread": spread_api,
                         "mc": mc, "ml": ml, "elo_h": elo_h, "elo_a": elo_a, "prob_elo": prob_elo_home,
                         "temp": temp, "wind": wind, "is_dome": is_dome, "clima_str": clima_str
                     })
@@ -355,8 +376,8 @@ with pestana_escanner:
                         with col_d1:
                             st.markdown("**📊 Montecarlo & ELO**")
                             st.write(f"- Total Proyectado: **{score_dict.get('Total_Proyectado', 0)} pts** (Línea O/U: {d['linea']})")
+                            st.write(f"- Spread / Handicap Línea: **{d['spread']}**")
                             st.write(f"- Prob. Victoria ELO ({eq_local_j} Local): **{round(d['prob_elo'], 1)}%**")
-                            st.write(f"- Prob. Victoria ELO ({eq_visita_j} Visita): **{round(100.0 - d['prob_elo'], 1)}%**")
                             st.write(f"- Prob. Over / Under: **{d['mc']['Over_Under']['Prob Over']}% / {d['mc']['Over_Under']['Prob Under']}%**")
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
