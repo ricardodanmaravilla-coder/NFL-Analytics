@@ -202,7 +202,7 @@ pestana_escanner, pestana_qbs, pestana_power = st.tabs(["🤖 Escáner de Jornad
 # 1. PESTAÑA: ESCÁNER DE JORNADA
 # ==========================================
 with pestana_escanner:
-    st.markdown("### 🤖 Escáner Automático de Jornada Multi-Mercado (Spread, Moneyline, Totales y QBs)")
+    st.markdown("### 🤖 Escáner Automático de Jornada Multi-Mercado (Filtro EV+ Profesional: +5% a +25%)")
 
     col_auto1, col_auto2, col_auto3 = st.columns(3)
     with col_auto1:
@@ -212,8 +212,8 @@ with pestana_escanner:
     with col_auto3:
         min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
-    if st.button("🚀 Escanear Jornada con Handicap y EV+", type="primary"):
-        with st.spinner("Analizando hándicaps, valor esperado (EV+), ELO, Montecarlo y Líneas de Casino..."):
+    if st.button("🚀 Escanear Jornada con Filtro EV+ Pro (+5% a +25%)", type="primary"):
+        with st.spinner("Filtrando valor real (EV+ entre 5% y 25%), ELO, Montecarlo y Líneas de Casino..."):
             juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
             espn_odds = obtener_odds_espn_real(semana_auto, temporada_auto)
             
@@ -260,24 +260,19 @@ with pestana_escanner:
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
-                    # --- CÁLCULO PRECISO DE PROBABILIDAD DE SPREAD (HANDICAP) ---
-                    margen_ml = ml['ML_Margen_Local_Esperado'] # Margen proyectado por IA (ej: Local gana por 4.5 pts)
-                    
-                    # Probabilidad de que el local cubra el hándicap (Spread API es el hándicap del visitante/local según formato, ej -3.5)
-                    # Si el spread es -3.5 para el local, necesita ganar por más de 3.5 puntos.
-                    # Usamos el margen de IA comparado contra el spread para calcular la probabilidad real:
+                    margen_ml = ml['ML_Margen_Local_Esperado']
                     diferencia_spread = margen_ml + spread_api
-                    # Convertir la diferencia en porcentaje de probabilidad de cobertura normalizado
                     prob_cover_home = round(min(88.0, max(12.0, 50.0 + (diferencia_spread * 6.5))), 1)
                     prob_cover_away = round(100.0 - prob_cover_home, 1)
 
-                    # 1. EVALUAR GANADOR (MONEYLINE) CON EV+
+                    # 1. EVALUAR GANADOR (MONEYLINE) CON FILTRO EV+ PROFESIONAL (+5% a +25%)
                     if prob_elo_home >= min_prob_filtro:
                         p_val = round(prob_elo_home, 1)
                         momio_ml = convertir_prob_a_momio_americano(p_val)
                         dec_ml = convertir_momio_americano_decimal(momio_ml)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
-                        if ev_val > 0:
+                        
+                        if 5.0 <= ev_val <= 25.0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {p_val}% | {momio_ml} | +{ev_val}% | ✅ CONSENSO BLINDADO")
                             
                     if prob_elo_away >= min_prob_filtro:
@@ -285,25 +280,26 @@ with pestana_escanner:
                         momio_ml = convertir_prob_a_momio_americano(p_val)
                         dec_ml = convertir_momio_americano_decimal(momio_ml)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
-                        if ev_val > 0:
+                        
+                        if 5.0 <= ev_val <= 25.0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Visita ({away_code}) | {p_val}% | {momio_ml} | +{ev_val}% | ✅ CONSENSO BLINDADO")
 
-                    # 2. EVALUAR HANDICAP / SPREAD CON FILTRO EV+
+                    # 2. EVALUAR HANDICAP / SPREAD CON FILTRO EV+ PROFESIONAL (+5% a +25%)
                     momio_spread_raw = match_odds.get("spread_odds", "-110")
                     dec_spread = convertir_momio_americano_decimal(momio_spread_raw)
 
                     if prob_cover_home >= min_prob_filtro:
                         ev_h_spread = round(((prob_cover_home / 100.0) * dec_spread - 1.0) * 100, 1)
-                        if ev_h_spread > 0:
+                        if 5.0 <= ev_h_spread <= 25.0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Local ({home_code} {spread_api}) | {prob_cover_home}% | {momio_spread_raw} | +{ev_h_spread}% | ✅ CONSENSO BLINDADO")
 
                     if prob_cover_away >= min_prob_filtro:
                         ev_a_spread = round(((prob_cover_away / 100.0) * dec_spread - 1.0) * 100, 1)
-                        if ev_a_spread > 0:
+                        if 5.0 <= ev_a_spread <= 25.0:
                             spread_away_val = -spread_api if spread_api != 0 else 0.0
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Visita ({away_code} {spread_away_val:+}) | {prob_cover_away}% | {momio_spread_raw} | +{ev_a_spread}% | ✅ CONSENSO BLINDADO")
 
-                    # 3. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER) CON FILTRO EV+
+                    # 3. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER) CON FILTRO EV+ PROFESIONAL (+5% a +25%)
                     es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
                     es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
                     
@@ -311,17 +307,17 @@ with pestana_escanner:
                         momio_o = match_odds.get("over_odds", "-110")
                         dec_o = convertir_momio_americano_decimal(momio_o)
                         ev_o = round(((prob_over / 100.0) * dec_o - 1.0) * 100, 1)
-                        if ev_o > 0:
+                        if 5.0 <= ev_o <= 25.0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Over {linea_ou_api} Pts | {prob_over}% | {momio_o} | +{ev_o}% | ✅ CONSENSO BLINDADO")
                             
                     elif es_under:
                         momio_u = match_odds.get("under_odds", "-110")
                         dec_u = convertir_momio_americano_decimal(momio_u)
                         ev_u = round(((prob_under / 100.0) * dec_u - 1.0) * 100, 1)
-                        if ev_u > 0:
+                        if 5.0 <= ev_u <= 25.0:
                             apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Under {linea_ou_api} Pts | {prob_under}% | {momio_u} | +{ev_u}% | ✅ CONSENSO BLINDADO")
 
-                    # 4. EVALUAR YARDAS DE QBS CON FILTRO EV+
+                    # 4. EVALUAR YARDAS DE QBS CON FILTRO EV+ PROFESIONAL (+5% a +25%)
                     if 'home_team' in df_qbs.columns and 'away_team' in df_qbs.columns:
                         qbs_partido = df_qbs[(df_qbs['home_team'] == home_code) | (df_qbs['away_team'] == away_code)]
                     elif 'posteam' in df_qbs.columns:
@@ -339,13 +335,13 @@ with pestana_escanner:
                             if p_over_yds >= min_prob_filtro:
                                 dec_qb = convertir_momio_americano_decimal("-110")
                                 ev_qb = round(((p_over_yds / 100.0) * dec_qb - 1.0) * 100, 1)
-                                if ev_qb > 0:
+                                if 5.0 <= ev_qb <= 25.0:
                                     apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre}** | Over 245.5 Yds Pase | {p_over_yds}% | -110 | +{ev_qb}% | ✅ CONSENSO BLINDADO")
                                     
                             elif p_under_yds >= min_prob_filtro:
                                 dec_qb = convertir_momio_americano_decimal("-110")
                                 ev_qb = round(((p_under_yds / 100.0) * dec_qb - 1.0) * 100, 1)
-                                if ev_qb > 0:
+                                if 5.0 <= ev_qb <= 25.0:
                                     apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre}** | Under 245.5 Yds Pase | {p_under_yds}% | -110 | +{ev_qb}% | ✅ CONSENSO BLINDADO")
 
                     detalles_juegos.append({
@@ -362,11 +358,11 @@ with pestana_escanner:
                 # --- RESUMEN DIRECTO ---
                 st.write("---")
                 if apuestas_destacadas:
-                    st.success(f"🎯 **¡Se encontraron {len(apuestas_destacadas)} Apuestas con Valor Real (EV+) y Consenso Blindado!**")
+                    st.success(f"🎯 **¡Se encontraron {len(apuestas_destacadas)} Apuestas con Valor Real Profesional (EV+ 5% a 25%)!**")
                     for ap in apuestas_destacadas:
                         st.markdown(f"- {ap}")
                 else:
-                    st.warning("⚠️ No se encontraron selecciones que superen el filtro de probabilidad Y tengan EV+ positivo al mismo tiempo.")
+                    st.warning("⚠️ No se encontraron selecciones dentro del rango óptimo de EV+ (+5% a +25%) para esta semana.")
 
                 st.write("---")
                 st.markdown("### 📋 Desglose Completo de la Jornada")
