@@ -108,6 +108,23 @@ def obtener_clima_estadio(equipo_local):
         
     return temp_base, viento_base, False
 
+def convertir_prob_a_momio_americano(prob_porcentaje):
+    """Convierte de forma precisa la probabilidad porcentual en su momio americano real de casino"""
+    p = prob_porcentaje / 100.0
+    if p <= 0.01:
+        return "+10000"
+    if p >= 0.99:
+        return "-10000"
+    
+    if p >= 0.5:
+        # Favorito (Momio negativo)
+        americano = int(round(- (p / (1.0 - p)) * 100))
+    else:
+        # Perro / Underdog (Momio positivo)
+        americano = int(round(((1.0 - p) / p) * 100))
+        return f"+{americano}"
+    return str(americano)
+
 def obtener_odds_espn_real(semana, temporada=2026):
     """Extrae líneas, over/under y momios reales directamente del API público de ESPN"""
     url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={temporada}&week={semana}"
@@ -118,7 +135,7 @@ def obtener_odds_espn_real(semana, temporada=2026):
         "KC":  "KC",  "LV":  "LV",  "LAC": "LAC", "LAR": "LA",  "MIA": "MIA",
         "MIN": "MIN", "NE":  "NE",  "NO":  "NO",  "NYG": "NYG", "NYJ": "NYJ",
         "PHI": "PHI", "PIT": "PIT", "SF":  "SF",  "SEA": "SEA", "TB":  "TB",
-        "TEN": "TEN", "WSH": "WAS", "WAS": "WAS"
+        "TEN": "TEN", "WSH": "WAS", "WSH": "WAS"
     }
 
     odds_dict = {}
@@ -144,7 +161,6 @@ def obtener_odds_espn_real(semana, temporada=2026):
             if odds_list and home_code:
                 first_odds = odds_list[0]
                 total_line = first_odds.get("overUnder", 45.5)
-                # Extraer los momios de las cuotas publicadas en ESPN (si están disponibles)
                 over_odds = first_odds.get("overOdds", "-110")
                 under_odds = first_odds.get("underOdds", "-110")
                 
@@ -213,7 +229,6 @@ with pestana_escanner:
                     temp, wind, is_dome = obtener_clima_estadio(home_code)
                     clima_str = "🏠 Domo (Controlado)" if is_dome else f"🌡️ {temp}°F | 💨 {wind} mph"
                     
-                    # Extracción real desde el diccionario de ESPN
                     match_odds = espn_odds.get(home_code, {})
                     linea_ou_api = match_odds.get("total")
                     if not linea_ou_api:
@@ -234,18 +249,20 @@ with pestana_escanner:
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
-                    # 1. EVALUAR GANADOR (LOCAL / VISITA)
+                    # 1. EVALUAR GANADOR (LOCAL / VISITA) CON MOMIO REAL DE MERCADO
                     es_ganador_local = prob_elo_home >= min_prob_filtro
                     es_ganador_visita = prob_elo_away >= min_prob_filtro
                     
                     if es_ganador_local:
                         p_val = round(prob_elo_home, 1)
-                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {p_val}% | -110 | +3.0% | ✅ CONSENSO BLINDADO")
+                        momio_ml = convertir_prob_a_momio_americano(p_val)
+                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {p_val}% | {momio_ml} | +3.0% | ✅ CONSENSO BLINDADO")
                     elif es_ganador_visita:
                         p_val = round(prob_elo_away, 1)
-                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Visita ({away_code}) | {p_val}% | -110 | +3.0% | ✅ CONSENSO BLINDADO")
+                        momio_ml = convertir_prob_a_momio_americano(p_val)
+                        apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Visita ({away_code}) | {p_val}% | {momio_ml} | +3.0% | ✅ CONSENSO BLINDADO")
 
-                    # 2. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER)
+                    # 2. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER) CON MOMIO REAL DE ESPN
                     es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
                     es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
                     
