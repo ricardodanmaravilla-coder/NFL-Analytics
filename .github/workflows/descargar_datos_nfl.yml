@@ -1,9 +1,13 @@
 name: Descargar Historico NFL
 
 on:
-  workflow_dispatch: # Botón para ejecutarlo manualmente cuando quieras
+  workflow_dispatch: 
   schedule:
-    - cron: '0 12 * * 2' # Se ejecuta automático cada martes a las 12:00 PM UTC (Mañana en México)
+    - cron: '0 12 * * 2' 
+
+# 👇 ESTE ES EL PERMISO CLAVE QUE FALTABA
+permissions:
+  contents: write
 
 jobs:
   actualizar-nfl:
@@ -18,7 +22,7 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Instalar librerias (nfl_data_py y pandas)
+      - name: Instalar librerias
         run: |
           python -m pip install --upgrade pip
           pip install pandas nfl_data_py fastparquet
