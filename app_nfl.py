@@ -32,14 +32,14 @@ estadios_info = {
     "DEN": {"lat": 39.743, "lon": -105.020, "dome": False},
     "KC":  {"lat": 39.048, "lon": -94.483, "dome": False},
     "LV":  {"lat": 36.090, "lon": -115.183, "dome": True},
-    "OAK": {"lat": 36.090, "lon": -115.183, "dome": True}, # Variante histórica Raiders
+    "OAK": {"lat": 36.090, "lon": -115.183, "dome": True},
     "LAC": {"lat": 33.953, "lon": -118.339, "dome": True},
-    "SD":  {"lat": 33.953, "lon": -118.339, "dome": True},  # Variante histórica Chargers
+    "SD":  {"lat": 33.953, "lon": -118.339, "dome": True},
     "DAL": {"lat": 32.747, "lon": -97.092, "dome": True},
     "NYG": {"lat": 40.813, "lon": -74.074, "dome": False},
     "PHI": {"lat": 39.900, "lon": -75.167, "dome": False},
     "WAS": {"lat": 38.907, "lon": -76.864, "dome": False},
-    "WSH": {"lat": 38.907, "lon": -76.864, "dome": False}, # Variante Washington
+    "WSH": {"lat": 38.907, "lon": -76.864, "dome": False},
     "CHI": {"lat": 41.862, "lon": -87.616, "dome": False},
     "DET": {"lat": 42.340, "lon": -83.045, "dome": True},
     "GB":  {"lat": 44.501, "lon": -88.062, "dome": False},
@@ -50,7 +50,7 @@ estadios_info = {
     "TB":  {"lat": 27.975, "lon": -82.503, "dome": False},
     "ARI": {"lat": 33.527, "lon": -112.262, "dome": True},
     "LA":  {"lat": 33.953, "lon": -118.339, "dome": True},
-    "LAR": {"lat": 33.953, "lon": -118.339, "dome": True}, # Variante Rams
+    "LAR": {"lat": 33.953, "lon": -118.339, "dome": True},
     "SF":  {"lat": 37.403, "lon": -121.969, "dome": False},
     "SEA": {"lat": 47.595, "lon": -122.331, "dome": False}
 }
@@ -80,16 +80,14 @@ def calcular_elo_global(df):
 motor_elo_global = calcular_elo_global(df_games)
 
 # --- FUNCIONES AUXILIARES ---
-def obtener_clima_estadio(equipo_local, fecha_str=""):
-    """Consulta el clima o genera un entorno realista según la ubicación y época del año"""
-    info = estadios_info.get(equipo_local)
-    if not info: 
-        return 70.0, 0.0, False
+def obtener_clima_estadio(equipo_local):
+    """Consulta el clima en vivo o aplica respaldo estacional según la región"""
+    info = estadios_info.get(equipo_local, {"lat": 0, "lon": 0, "dome": False})
     
     if info["dome"]: 
         return 70.0, 0.0, True
     
-    # Intentar obtener el clima en vivo de Open-Meteo
+    # Intentar obtener clima real de Open-Meteo
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={info['lat']}&longitude={info['lon']}&current_weather=true"
         res = requests.get(url, timeout=3).json()
@@ -102,16 +100,14 @@ def obtener_clima_estadio(equipo_local, fecha_str=""):
     except:
         pass
     
-    # Respaldo inteligente estacional (por si la API externa no tiene datos de fechas futuras)
-    # En la temporada NFL (Septiembre a Enero), las temperaturas varían lógicamente por región
+    # Respaldo inteligente estacional por región
     temp_base = 65.0
     viento_base = 6.0
-    
     if equipo_local in ["BUF", "GB", "NE", "CHI", "MIN"]:
-        temp_base = 42.0  # Ciudades frías del norte
+        temp_base = 42.0
         viento_base = 12.0
     elif equipo_local in ["MIA", "TB", "NO", "JAX", "ATL", "CAR"]:
-        temp_base = 82.0  # Ciudades cálidas del sur
+        temp_base = 82.0
         viento_base = 5.0
         
     return temp_base, viento_base, False
@@ -166,7 +162,10 @@ with pestana_escanner:
                     if not home_code or not away_code:
                         continue
                         
+                    # Corrección Clima / Domo
                     temp, wind, is_dome = obtener_clima_estadio(home_code)
+                    clima_str = "🏠 Domo (Controlado)" if is_dome else f"🌡️ {temp}°F | 💨 {wind} mph"
+                    
                     linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
                     spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                     
@@ -198,10 +197,11 @@ with pestana_escanner:
                         "fecha": fecha_partido,
                         "linea": linea_ou_api,
                         "mc": mc, "ml": ml, "elo_h": elo_h, "elo_a": elo_a, "prob_elo": prob_elo_home,
-                        "temp": temp, "wind": wind, "is_dome": is_dome, "veredicto": veredicto, "es_recomendado": (es_over or es_under)
+                        "temp": temp, "wind": wind, "is_dome": is_dome, "clima_str": clima_str,
+                        "veredicto": veredicto, "es_recomendado": (es_over or es_under)
                     })
 
-                # --- MOSTRAR RESUMEN DIRECTO DE APUESTAS RECOMENDADAS ---
+                # --- RESUMEN DIRECTO ---
                 st.write("---")
                 if apuestas_destacadas:
                     st.success(f"🎯 **¡Se encontraron {len(apuestas_destacadas)} Apuestas de Oro con Consenso Blindado!**")
@@ -213,9 +213,7 @@ with pestana_escanner:
                 st.write("---")
                 st.markdown("### 📋 Desglose Completo de la Jornada")
                 
-                # Renderizar los expanders con el detalle limpio de cada partido
                 for d in detalles_juegos:
-                    clima_str = "🏠 Domo" if d["is_dome"] else f"🌡️ {d['temp']}°F 💨 {d['wind']}mph"
                     with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Estado: {d['veredicto']}"):
                         col_d1, col_d2 = st.columns(2)
                         with col_d1:
@@ -234,7 +232,7 @@ with pestana_escanner:
                             st.write(f"- Prob. Over / Under: **{d['mc']['Over_Under']['Prob Over']}% / {d['mc']['Over_Under']['Prob Under']}%**")
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
-                            st.write(f"- Clima: {clima_str}")
+                            st.write(f"- Clima: {d['clima_str']}")
                             st.write(f"- Puntos Ajustados IA: **{d['ml']['ML_Puntos_Totales_Esperados']} pts**")
                             st.write(f"- Margen Local Previsto: **{d['ml']['ML_Margen_Local_Esperado']} pts**")
 
