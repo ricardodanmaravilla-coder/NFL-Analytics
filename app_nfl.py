@@ -248,7 +248,9 @@ with pestana_escanner:
                         spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
                     
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
-                    ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
+                    
+                    # Llamada actualizada con el enfrentamiento de poder Ofensivo vs Defensivo real de ambos equipos
+                    ml = ml_engine.predecir_contexto(semana_auto, home_code, away_code, temp, wind, 1 if is_dome else 0)
                     
                     elo_h = motor_elo_global.ratings.get(home_code, 1500)
                     elo_a = motor_elo_global.ratings.get(away_code, 1500)
