@@ -141,11 +141,20 @@ if st.button("Ejecutar Simulador Híbrido NFL", type="primary"):
                 st.markdown("**🏈 Hándicap (Spread)**")
                 st.write(f"- ML predice victoria de: **{favorito_ml} por {margen_ml_abs} pts**")
                 
-                # Evaluación básica del spread
+                # Explicación explícita del modelo ML
                 cubre_ml_local = margen_ml > abs(spread_local) if spread_local < 0 else margen_ml > -spread_local
-                if (resultados_mc['Spread']['Cubre Local'] > 55.0) and cubre_ml_local:
-                    st.success(f"✅ **CONSENSO BLINDADO:** {local} cubre el spread de {spread_local}.")
-                elif (resultados_mc['Spread']['Cubre Visita'] > 55.0) and not cubre_ml_local:
-                    st.success(f"✅ **CONSENSO BLINDADO:** {visita} cubre su spread.")
+                
+                if cubre_ml_local:
+                    st.write(f"- *Diagnóstico ML:* El local **SÍ** cubre la línea de {spread_local}.")
                 else:
-                    st.warning("⚠️ **Sin valor claro en el Spread.** Paso.")
+                    st.write(f"- *Diagnóstico ML:* El visitante **SÍ** cubre la línea de {spread_local} (El local no saca suficiente ventaja).")
+                
+                st.markdown("---")
+                
+                # Evaluación final de Consenso
+                if (resultados_mc['Spread']['Cubre Local'] > 55.0) and cubre_ml_local:
+                    st.success(f"✅ **CONSENSO BLINDADO:** Ambos motores confirman que {local} cubre el spread de {spread_local}.")
+                elif (resultados_mc['Spread']['Cubre Visita'] > 55.0) and not cubre_ml_local:
+                    st.success(f"✅ **CONSENSO BLINDADO:** Ambos motores confirman que {visita} cubre el spread.")
+                else:
+                    st.warning("⚠️ **CONFLICTO:** Montecarlo y ML no están de acuerdo en el Spread. ¡Aléjate de esta apuesta!")
