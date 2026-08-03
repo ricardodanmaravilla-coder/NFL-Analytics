@@ -110,6 +110,64 @@ def obtener_clima_estadio(equipo_local):
         
     return temp_base, viento_base, False
 
+def obtener_odds_casinos():
+    """Consulta las líneas reales de Las Vegas usando The Odds API desde los secretos del sistema"""
+    # Busca la llave en st.secrets (Streamlit Cloud) o en os.environ (GitHub Actions / Local)
+    odds_key = None
+    try:
+        if "THE_ODDS_API_KEY" in st.secrets:
+            odds_key = st.secrets["THE_ODDS_API_KEY"]
+    except:
+        pass
+    
+    if not odds_key:
+        odds_key = os.environ.get("THE_ODDS_API_KEY")
+        
+    if not odds_key:
+        return {}
+    
+    url = f"https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?regions=us&markets=spreads,totals&oddsFormat=american&apiKey={odds_key}"
+    try:
+        res = requests.get(url, timeout=5).json()
+        odds_dict = {}
+        if isinstance(res, list):
+            for partido in res:
+                home_team = partido.get("home_team")
+                bookmakers = partido.get("bookmakers", [])
+                if bookmakers:
+                    markets = bookmakers[0].get("markets", [])
+                    spread_val = -3.0
+                    total_val = 45.5
+                    
+                    for m in markets:
+                        if m["key"] == "spreads":
+                            for outcome in m["outcomes"]:
+                                if outcome.get("name") == home_team:
+                                    spread_val = outcome.get("point", -3.0)
+                        if m["key"] == "totals":
+                            for outcome in m["outcomes"]:
+                                if outcome.get("name") == "Over":
+                                    total_val = outcome.get("point", 45.5)
+                                    
+                    team_mapping_inv = {
+                        "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
+                        "Buffalo Bills": "BUF", "Carolina Panthers": "CAR", "Chicago Bears": "CHI",
+                        "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE", "Dallas Cowboys": "DAL",
+                        "Denver Broncos": "DEN", "Detroit Lions": "DET", "Green Bay Packers": "GB",
+                        "Houston Texans": "HOU", "Indianapolis Colts": "IND", "Jacksonville Jaguars": "JAX",
+                        "Kansas City Chiefs": "KC", "Las Vegas Raiders": "LV", "Los Angeles Chargers": "LAC",
+                        "Los Angeles Rams": "LA", "Miami Dolphins": "MIA", "Minnesota Vikings": "MIN",
+                        "New England Patriots": "NE", "New Orleans Saints": "NO", "New York Giants": "NYG",
+                        "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT",
+                        "San Francisco 49ers": "SF", "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB",
+                        "Tennessee Titans": "TEN", "Washington Commanders": "WAS"
+                    }
+                    codigo_corto = team_mapping_inv.get(home_team, home_team)
+                    odds_dict[codigo_corto] = {"spread": spread_val, "total": total_val}
+        return odds_dict
+    except:
+        return {}
+
 def obtener_calendario_nfl(temporada, semana):
     try:
         juegos_temp = df_games[(df_games['season'] == temporada) & (df_games['week'] == semana)].copy()
@@ -131,17 +189,18 @@ pestana_escanner, pestana_qbs, pestana_power = st.tabs(["🤖 Escáner de Jornad
 with pestana_escanner:
     st.markdown("### 🤖 Escáner Automático de Jornada (Filtro Estricto 60%+)")
 
-    col_auto1, col_auto2, col_auto3 = st.columns(3)
-    with col_auto1:
+    col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
+    with col_cfg1:
         temporada_auto = st.number_input("Temporada:", min_value=2020, max_value=2030, value=2026)
-    with col_auto2:
+    with col_cfg2:
         semana_auto = st.number_input("Semana a escanear:", min_value=1, max_value=22, value=1)
-    with col_auto3:
+    with col_cfg3:
         min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
     if st.button("🚀 Escanear Toda la Semana (Multi-Motor)", type="primary"):
-        with st.spinner("Analizando ELO, Montecarlo, Clima y Machine Learning..."):
+        with st.spinner("Conectando con casinos seguros, ELO, Montecarlo y Clima..."):
             juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
+            diccionario_odds_reales = obtener_odds_casinos()
             
             if juegos_df.empty:
                 st.warning(f"⚠️ No se encontraron partidos para la Temporada {temporada_auto}, Semana {semana_auto}.")
@@ -163,8 +222,9 @@ with pestana_escanner:
                     temp, wind, is_dome = obtener_clima_estadio(home_code)
                     clima_str = "🏠 Domo (Controlado)" if is_dome else f"🌡️ {temp}°F | 💨 {wind} mph"
                     
-                    linea_ou_api = float(j.get("total", 45.5)) if pd.notna(j.get("total")) else 45.5
-                    spread_api = float(j.get("spread_line", -3.0)) if pd.notna(j.get("spread_line")) else -3.0
+                    odds_equipo_home = diccionario_odds_reales.get(home_code, {})
+                    linea_ou_api = float(odds_equipo_home.get("total", j.get("total", 45.5) if pd.notna(j.get("total")) else 45.5))
+                    spread_api = float(odds_equipo_home.get("spread", j.get("spread_line", -3.0) if pd.notna(j.get("spread_line")) else -3.0))
                     
                     mc = simular_nfl_montecarlo(home_code, away_code, df_games, linea_ou_api, spread_api)
                     ml = ml_engine.predecir_contexto(semana_auto, home_code, temp, wind, 1 if is_dome else 0)
@@ -211,7 +271,7 @@ with pestana_escanner:
                 st.markdown("### 📋 Desglose Completo de la Jornada")
                 
                 for d in detalles_juegos:
-                    with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Estado: {d['veredicto']}"):
+                    with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Línea O/U: {d['linea']} | Estado: {d['veredicto']}"):
                         col_d1, col_d2 = st.columns(2)
                         with col_d1:
                             st.markdown("**📊 Montecarlo & ELO**")
@@ -220,7 +280,6 @@ with pestana_escanner:
                             eq_visita_j = equipos_en_juego[0] if len(equipos_en_juego) > 0 else 'Visita'
                             eq_local_j = equipos_en_juego[1] if len(equipos_en_juego) > 1 else 'Local'
                             
-                            # Convertir a enteros redondeados
                             p_visita = int(round(score_dict.get(eq_visita_j, 0), 0))
                             p_local = int(round(score_dict.get(eq_local_j, 0), 0))
                             total_pts_entero = int(round(score_dict.get('Total_Proyectado', 0), 0))
@@ -232,7 +291,6 @@ with pestana_escanner:
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
                             st.write(f"- Clima: {d['clima_str']}")
-                            # Redondear puntos ajustados por ML a enteros
                             puntos_ml_entero = int(round(d['ml']['ML_Puntos_Totales_Esperados'], 0))
                             margen_ml_entero = round(d['ml']['ML_Margen_Local_Esperado'], 1)
                             
