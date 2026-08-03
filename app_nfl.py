@@ -15,7 +15,7 @@ API_KEY = os.environ.get("API_SPORTS_KEY")
 HEADERS = {'x-apisports-key': API_KEY}
 BASE_URL_NFL = "https://v1.american-football.api-sports.io"
 
-# --- COORDENADAS Y TIPO DE ESTADIO PARA EL CLIMA ---
+# --- COORDENADAS Y TIPO DE ESTADIO PARA EL CLIMA (BLINDADO) ---
 estadios_info = {
     "BUF": {"lat": 42.773, "lon": -78.786, "dome": False},
     "MIA": {"lat": 25.957, "lon": -80.238, "dome": False},
@@ -32,11 +32,14 @@ estadios_info = {
     "DEN": {"lat": 39.743, "lon": -105.020, "dome": False},
     "KC":  {"lat": 39.048, "lon": -94.483, "dome": False},
     "LV":  {"lat": 36.090, "lon": -115.183, "dome": True},
+    "OAK": {"lat": 36.090, "lon": -115.183, "dome": True}, # Variante histórica Raiders
     "LAC": {"lat": 33.953, "lon": -118.339, "dome": True},
+    "SD":  {"lat": 33.953, "lon": -118.339, "dome": True},  # Variante histórica Chargers
     "DAL": {"lat": 32.747, "lon": -97.092, "dome": True},
     "NYG": {"lat": 40.813, "lon": -74.074, "dome": False},
     "PHI": {"lat": 39.900, "lon": -75.167, "dome": False},
     "WAS": {"lat": 38.907, "lon": -76.864, "dome": False},
+    "WSH": {"lat": 38.907, "lon": -76.864, "dome": False}, # Variante Washington
     "CHI": {"lat": 41.862, "lon": -87.616, "dome": False},
     "DET": {"lat": 42.340, "lon": -83.045, "dome": True},
     "GB":  {"lat": 44.501, "lon": -88.062, "dome": False},
@@ -47,6 +50,7 @@ estadios_info = {
     "TB":  {"lat": 27.975, "lon": -82.503, "dome": False},
     "ARI": {"lat": 33.527, "lon": -112.262, "dome": True},
     "LA":  {"lat": 33.953, "lon": -118.339, "dome": True},
+    "LAR": {"lat": 33.953, "lon": -118.339, "dome": True}, # Variante Rams
     "SF":  {"lat": 37.403, "lon": -121.969, "dome": False},
     "SEA": {"lat": 47.595, "lon": -122.331, "dome": False}
 }
