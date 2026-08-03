@@ -87,7 +87,6 @@ def obtener_clima_estadio(equipo_local):
     if info["dome"]: 
         return 70.0, 0.0, True
     
-    # Intentar obtener clima real de Open-Meteo
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={info['lat']}&longitude={info['lon']}&current_weather=true"
         res = requests.get(url, timeout=3).json()
@@ -100,7 +99,6 @@ def obtener_clima_estadio(equipo_local):
     except:
         pass
     
-    # Respaldo inteligente estacional por región
     temp_base = 65.0
     viento_base = 6.0
     if equipo_local in ["BUF", "GB", "NE", "CHI", "MIN"]:
@@ -162,7 +160,6 @@ with pestana_escanner:
                     if not home_code or not away_code:
                         continue
                         
-                    # Corrección Clima / Domo
                     temp, wind, is_dome = obtener_clima_estadio(home_code)
                     clima_str = "🏠 Domo (Controlado)" if is_dome else f"🌡️ {temp}°F | 💨 {wind} mph"
                     
@@ -223,18 +220,24 @@ with pestana_escanner:
                             eq_visita_j = equipos_en_juego[0] if len(equipos_en_juego) > 0 else 'Visita'
                             eq_local_j = equipos_en_juego[1] if len(equipos_en_juego) > 1 else 'Local'
                             
-                            p_visita = score_dict.get(eq_visita_j, 0)
-                            p_local = score_dict.get(eq_local_j, 0)
+                            # Convertir a enteros redondeados
+                            p_visita = int(round(score_dict.get(eq_visita_j, 0), 0))
+                            p_local = int(round(score_dict.get(eq_local_j, 0), 0))
+                            total_pts_entero = int(round(score_dict.get('Total_Proyectado', 0), 0))
                             
                             st.write(f"- Proyección Score: **{eq_visita_j} {p_visita} - {p_local} {eq_local_j}**")
-                            st.write(f"- Total Proyectado: **{score_dict.get('Total_Proyectado', 0)} pts**")
+                            st.write(f"- Total Proyectado: **{total_pts_entero} pts**")
                             st.write(f"- Prob. Victoria ELO: **{round(d['prob_elo'], 1)}%**")
                             st.write(f"- Prob. Over / Under: **{d['mc']['Over_Under']['Prob Over']}% / {d['mc']['Over_Under']['Prob Under']}%**")
                         with col_d2:
                             st.markdown("**🤖 Machine Learning & Clima**")
                             st.write(f"- Clima: {d['clima_str']}")
-                            st.write(f"- Puntos Ajustados IA: **{d['ml']['ML_Puntos_Totales_Esperados']} pts**")
-                            st.write(f"- Margen Local Previsto: **{d['ml']['ML_Margen_Local_Esperado']} pts**")
+                            # Redondear puntos ajustados por ML a enteros
+                            puntos_ml_entero = int(round(d['ml']['ML_Puntos_Totales_Esperados'], 0))
+                            margen_ml_entero = round(d['ml']['ML_Margen_Local_Esperado'], 1)
+                            
+                            st.write(f"- Puntos Ajustados IA: **{puntos_ml_entero} pts**")
+                            st.write(f"- Margen Local Previsto: **{margen_ml_entero} pts**")
 
 # ==========================================
 # 2. PESTAÑA: ANALIZADOR DE YARDAS DE QBS
