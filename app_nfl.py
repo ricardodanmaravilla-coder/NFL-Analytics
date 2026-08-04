@@ -7,6 +7,7 @@ from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 from modules.nfl_ml_engine import PredictorNFL_ML
 from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_qb_engine import PredictorYardasQB
+from modules.nfl_xgb_engine import PredictorXGBoostSpread
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="🏈 NFL Analytics & Value Betting (Sistema Institucional)", layout="wide")
@@ -131,7 +132,7 @@ def convertir_prob_a_momio_americano(prob_porcentaje):
         return f"+{americano}"
     return str(americano)
 
-# --- NUEVAS FUNCIONES INSTITUCIONALES (KELLY & ODDS SEGUROS) ---
+# --- FUNCIONES INSTITUCIONALES (KELLY & ODDS SEGUROS) ---
 def obtener_momio_decimal_seguro(match_odds_dict, tipo_mercado, prob_modelo):
     """Obtiene el momio real o calcula el justo para no desvirtuar el EV+"""
     try:
@@ -158,7 +159,6 @@ def calcular_kelly(prob_porcentaje, momio_decimal, fraccion=0.25):
     if b <= 0: return 0.0
     kelly_puro = (b * p - q) / b
     return round(max(0.0, kelly_puro * fraccion) * 100, 2)
-# ----------------------------------------------------------------
 
 def obtener_odds_espn_real(semana, temporada=2026):
     url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={temporada}&week={semana}"
@@ -241,8 +241,8 @@ with pestana_escanner:
     with col_auto3:
         min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
-    if st.button("🚀 Escanear Jornada (Poisson, EPA & Kelly)", type="primary"):
-        with st.spinner("Filtrando valor real (EV+), Integrando Modelos de Poisson, EPA, Ritmo y Criterio Kelly..."):
+    if st.button("🚀 Escanear Jornada (Poisson, EPA, XGBoost & Kelly)", type="primary"):
+        with st.spinner("Filtrando valor real (EV+), Integrando Modelos de Poisson, EPA, XGBoost y Criterio Kelly..."):
             juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
             espn_odds = obtener_odds_espn_real(semana_auto, temporada_auto)
             
@@ -251,6 +251,11 @@ with pestana_escanner:
             else:
                 ml_engine = PredictorNFL_ML()
                 ml_engine.entrenar(df_games, df_qbs)
+                
+                # Inicializar y entrenar XGBoost
+                xgb_engine = PredictorXGBoostSpread()
+                xgb_engine.entrenar(df_games)
+                
                 qb_engine = PredictorYardasQB(df_qbs)
                 
                 apuestas_destacadas = []
@@ -289,15 +294,19 @@ with pestana_escanner:
                     prob_over = mc['Over_Under']['Prob Over']
                     prob_under = mc['Over_Under']['Prob Under']
                     
-                    # --- CÁLCULO DE SPREAD PURO (MONTECARLO + ML) ---
+                    # --- FUSIÓN INSTITUCIONAL: MONTECARLO (POISSON) + XGBOOST + ML ---
                     prob_mc_home = mc['Spread']['Cubre Local']
-                    prob_mc_away = mc['Spread']['Cubre Visita']
                     
+                    diff_hist_base = (ml['ML_Puntos_Totales_Esperados'] / 2.0)
+                    prob_xgb_home = xgb_engine.predecir_probabilidad_cover(semana_auto, spread_api, diff_hist_base)
+                    if prob_xgb_home == 50.0:
+                        prob_xgb_home = prob_mc_home
+
                     margen_ml = ml['ML_Margen_Local_Esperado']
                     ml_apoya_local = (margen_ml + spread_api) > 0 
-                    ajuste_ml = 2.5 if ml_apoya_local else -2.5
+                    ajuste_ml = 2.0 if ml_apoya_local else -2.0
                     
-                    prob_cover_home = round(min(95.0, max(5.0, prob_mc_home + ajuste_ml)), 1)
+                    prob_cover_home = round(min(95.0, max(5.0, (prob_mc_home * 0.6 + prob_xgb_home * 0.4) + ajuste_ml)), 1)
                     prob_cover_away = round(100.0 - prob_cover_home, 1)
 
                     # 1. EVALUAR GANADOR (MONEYLINE) CON EV+ SEGURO Y KELLY
