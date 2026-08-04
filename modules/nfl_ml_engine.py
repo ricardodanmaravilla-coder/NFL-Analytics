@@ -13,24 +13,32 @@ class PredictorNFL_ML:
         
         self.power_off = {}
         self.power_def = {}
+        self.pace = {}
+        self.efficiency = {}
         
-        # Mapa de altitud de estadios (en pies)
         self.altitud_estadios = {
             'DEN': 5280, 'ARI': 1090, 'ATL': 1050, 'LV': 2000, 
             'KC': 900, 'DAL': 550, 'GB': 700, 'CAR': 750
         }
 
     def _calcular_poderes_unidades(self, df_games):
-        """Calcula el poder ofensivo y defensivo real basado en el histórico de puntos"""
+        """Calcula Poder, Ritmo (Pace) y Eficiencia Neta (EPA Proxy)"""
         home_off = df_games.groupby('home_team')['home_score'].mean().to_dict()
         home_def = df_games.groupby('home_team')['away_score'].mean().to_dict()
         away_off = df_games.groupby('away_team')['away_score'].mean().to_dict()
         away_def = df_games.groupby('away_team')['home_score'].mean().to_dict()
         
+        # Ritmo de juego (Puntos totales combinados en sus partidos)
+        df_games['total_pts_game'] = df_games['home_score'] + df_games['away_score']
+        pace_home = df_games.groupby('home_team')['total_pts_game'].mean().to_dict()
+        pace_away = df_games.groupby('away_team')['total_pts_game'].mean().to_dict()
+        
         teams = set(list(home_off.keys()) + list(away_off.keys()))
         
         self.power_off = {}
         self.power_def = {}
+        self.pace = {}
+        self.efficiency = {}
         
         for eq in teams:
             pts_a_favor = []
@@ -42,16 +50,29 @@ class PredictorNFL_ML:
             
             self.power_off[eq] = np.mean(pts_a_favor) if pts_a_favor else 22.0
             self.power_def[eq] = np.mean(pts_en_contra) if pts_en_contra else 22.0
+            
+            # Eficiencia (Puntos anotados vs recibidos)
+            self.efficiency[eq] = self.power_off[eq] - self.power_def[eq]
+            
+            # Pace
+            p_h = pace_home.get(eq, 44.0)
+            p_a = pace_away.get(eq, 44.0)
+            self.pace[eq] = (p_h + p_a) / 2.0
 
     def _limpiar_y_preparar(self, df_games, df_qbs=None):
         df = df_games.copy()
-        
         self._calcular_poderes_unidades(df)
         
         df['home_offense_power'] = df['home_team'].map(self.power_off).fillna(22.0)
         df['home_defense_power'] = df['home_team'].map(self.power_def).fillna(22.0)
         df['away_offense_power'] = df['away_team'].map(self.power_off).fillna(22.0)
         df['away_defense_power'] = df['away_team'].map(self.power_def).fillna(22.0)
+        
+        # Nuevas variables institucionales
+        df['home_efficiency'] = df['home_team'].map(self.efficiency).fillna(0.0)
+        df['away_efficiency'] = df['away_team'].map(self.efficiency).fillna(0.0)
+        df['home_pace'] = df['home_team'].map(self.pace).fillna(44.0)
+        df['away_pace'] = df['away_team'].map(self.pace).fillna(44.0)
         
         df['home_altitude'] = df['home_team'].map(self.altitud_estadios).fillna(50)
         df['is_dome'] = df['roof'].apply(lambda x: 1 if str(x).lower() in ['dome', 'closed'] else 0)
@@ -62,7 +83,8 @@ class PredictorNFL_ML:
         features = [
             'week', 'home_altitude', 'temp', 'wind', 'is_dome',
             'home_offense_power', 'home_defense_power', 
-            'away_offense_power', 'away_defense_power'
+            'away_offense_power', 'away_defense_power',
+            'home_efficiency', 'away_efficiency', 'home_pace', 'away_pace'
         ]
         
         df = df.dropna(subset=features + ['margen_local', 'puntos_totales'])
@@ -71,16 +93,13 @@ class PredictorNFL_ML:
     def entrenar(self, df_games, df_qbs=None):
         try:
             df_listo, self.features_cols = self._limpiar_y_preparar(df_games, df_qbs)
-            
             X = df_listo[self.features_cols]
             y_puntos = df_listo['puntos_totales']
             y_margen = df_listo['margen_local']
             
             X_scaled = self.scaler.fit_transform(X)
-            
             self.modelo_puntos_totales.fit(X_scaled, y_puntos)
             self.modelo_margen.fit(X_scaled, y_margen)
-            
             self.is_trained = True
             return True
         except Exception as e:
@@ -88,38 +107,25 @@ class PredictorNFL_ML:
             return False
 
     def predecir_contexto(self, week, home_team, away_team, temp, wind, is_dome):
-        """
-        Genera una predicción enfrentando el poder ofensivo y defensivo real de ambos equipos 
-        sumado a las condiciones del estadio y clima.
-        """
         if not self.is_trained:
             return None
             
-        altitud = self.altitud_estadios.get(home_team, 50)
-        
-        h_off = self.power_off.get(home_team, 22.0)
-        h_def = self.power_def.get(home_team, 22.0)
-        a_off = self.power_off.get(away_team, 22.0)
-        a_def = self.power_def.get(away_team, 22.0)
-        
         datos_hoy = pd.DataFrame([{
             'week': week,
-            'home_altitude': altitud,
-            'temp': temp,
-            'wind': wind,
-            'is_dome': is_dome,
-            'home_offense_power': h_off,
-            'home_defense_power': h_def,
-            'away_offense_power': a_off,
-            'away_defense_power': a_def
+            'home_altitude': self.altitud_estadios.get(home_team, 50),
+            'temp': temp, 'wind': wind, 'is_dome': is_dome,
+            'home_offense_power': self.power_off.get(home_team, 22.0),
+            'home_defense_power': self.power_def.get(home_team, 22.0),
+            'away_offense_power': self.power_off.get(away_team, 22.0),
+            'away_defense_power': self.power_def.get(away_team, 22.0),
+            'home_efficiency': self.efficiency.get(home_team, 0.0),
+            'away_efficiency': self.efficiency.get(away_team, 0.0),
+            'home_pace': self.pace.get(home_team, 44.0),
+            'away_pace': self.pace.get(away_team, 44.0)
         }])
         
         datos_scaled = self.scaler.transform(datos_hoy)
-        
-        pred_puntos = self.modelo_puntos_totales.predict(datos_scaled)[0]
-        pred_margen = self.modelo_margen.predict(datos_scaled)[0]
-        
         return {
-            "ML_Puntos_Totales_Esperados": round(pred_puntos, 1),
-            "ML_Margen_Local_Esperado": round(pred_margen, 1)
+            "ML_Puntos_Totales_Esperados": round(self.modelo_puntos_totales.predict(datos_scaled)[0], 1),
+            "ML_Margen_Local_Esperado": round(self.modelo_margen.predict(datos_scaled)[0], 1)
         }
