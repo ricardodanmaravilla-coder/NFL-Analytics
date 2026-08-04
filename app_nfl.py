@@ -9,7 +9,7 @@ from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_qb_engine import PredictorYardasQB
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="🏈 NFL Analytics & Value Betting (Sistema Pro)", layout="wide")
+st.set_page_config(page_title="🏈 NFL Analytics & Value Betting (Sistema Institucional)", layout="wide")
 
 API_KEY = os.environ.get("API_SPORTS_KEY")
 HEADERS = {'x-apisports-key': API_KEY}
@@ -55,7 +55,7 @@ estadios_info = {
     "SEA": {"lat": 47.595, "lon": -122.331, "dome": False}
 }
 
-st.title("🏈 NFL Analytics & Value Betting System Pro")
+st.title("🏈 NFL Analytics & Value Betting System Institucional")
 
 # --- CARGAR HISTÓRICO ---
 @st.cache_data(ttl=3600)
@@ -131,6 +131,35 @@ def convertir_prob_a_momio_americano(prob_porcentaje):
         return f"+{americano}"
     return str(americano)
 
+# --- NUEVAS FUNCIONES INSTITUCIONALES (KELLY & ODDS SEGUROS) ---
+def obtener_momio_decimal_seguro(match_odds_dict, tipo_mercado, prob_modelo):
+    """Obtiene el momio real o calcula el justo para no desvirtuar el EV+"""
+    try:
+        if tipo_mercado == "over":
+            raw_odds = match_odds_dict.get("over_odds", "-110")
+            return convertir_momio_americano_decimal(raw_odds)
+        elif tipo_mercado == "under":
+            raw_odds = match_odds_dict.get("under_odds", "-110")
+            return convertir_momio_americano_decimal(raw_odds)
+        elif tipo_mercado == "spread":
+            raw_odds = match_odds_dict.get("spread_odds", "-110")
+            return convertir_momio_americano_decimal(raw_odds)
+        else:
+            momio_amer = convertir_prob_a_momio_americano(prob_modelo)
+            return convertir_momio_americano_decimal(momio_amer)
+    except:
+        return 1.91
+
+def calcular_kelly(prob_porcentaje, momio_decimal, fraccion=0.25):
+    """Criterio Cuarto de Kelly: Define el % exacto de tu dinero a invertir"""
+    p = prob_porcentaje / 100.0
+    q = 1.0 - p
+    b = momio_decimal - 1.0
+    if b <= 0: return 0.0
+    kelly_puro = (b * p - q) / b
+    return round(max(0.0, kelly_puro * fraccion) * 100, 2)
+# ----------------------------------------------------------------
+
 def obtener_odds_espn_real(semana, temporada=2026):
     url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={temporada}&week={semana}"
     espn_to_std = {
@@ -196,13 +225,13 @@ def obtener_calendario_nfl(temporada, semana):
         return pd.DataFrame()
 
 # --- PESTAÑAS DE NAVEGACIÓN ---
-pestana_escanner, pestana_qbs, pestana_power = st.tabs(["🤖 Escáner de Jornada (EV+)", "🎯 Analizador de Yardas (QB Props)", "📈 Power Ranking ELO"])
+pestana_escanner, pestana_qbs, pestana_power = st.tabs(["🤖 Escáner de Jornada (EV+ & Kelly)", "🎯 Analizador de Yardas (QB Props)", "📈 Power Ranking ELO"])
 
 # ==========================================
 # 1. PESTAÑA: ESCÁNER DE JORNADA
 # ==========================================
 with pestana_escanner:
-    st.markdown("### 🤖 Escáner Automático de Jornada Multi-Mercado (Filtro EV+ Profesional: +5% a +25%)")
+    st.markdown("### 🤖 Escáner Automático de Jornada Multi-Mercado (Filtro Institucional: EV+ y Gestión Kelly)")
 
     col_auto1, col_auto2, col_auto3 = st.columns(3)
     with col_auto1:
@@ -212,8 +241,8 @@ with pestana_escanner:
     with col_auto3:
         min_prob_filtro = st.slider("Filtro de Probabilidad Mínima (%):", min_value=50, max_value=80, value=60, step=1)
 
-    if st.button("🚀 Escanear Jornada con Filtro EV+ Pro (+5% a +25%)", type="primary"):
-        with st.spinner("Filtrando valor real (EV+ entre 5% y 25%), ELO, Montecarlo y Líneas de Casino..."):
+    if st.button("🚀 Escanear Jornada (Poisson, EPA & Kelly)", type="primary"):
+        with st.spinner("Filtrando valor real (EV+), Integrando Modelos de Poisson, EPA, Ritmo y Criterio Kelly..."):
             juegos_df = obtener_calendario_nfl(temporada_auto, semana_auto)
             espn_odds = obtener_odds_espn_real(semana_auto, temporada_auto)
             
@@ -261,75 +290,76 @@ with pestana_escanner:
                     prob_under = mc['Over_Under']['Prob Under']
                     
                     # --- CÁLCULO DE SPREAD PURO (MONTECARLO + ML) ---
-                    # 1. Obtenemos la probabilidad exacta de las 1,000,000 de simulaciones de Montecarlo
                     prob_mc_home = mc['Spread']['Cubre Local']
                     prob_mc_away = mc['Spread']['Cubre Visita']
                     
-                    # 2. Obtenemos la postura de Machine Learning
                     margen_ml = ml['ML_Margen_Local_Esperado']
-                    # Si el margen proyectado por la IA más el spread es mayor a 0, la IA apoya al local
                     ml_apoya_local = (margen_ml + spread_api) > 0 
-                    
-                    # 3. Consenso: Usamos la probabilidad matemática exacta de Montecarlo, 
-                    # pero le damos una bonificación/penalización si Machine Learning está de acuerdo.
                     ajuste_ml = 2.5 if ml_apoya_local else -2.5
                     
                     prob_cover_home = round(min(95.0, max(5.0, prob_mc_home + ajuste_ml)), 1)
                     prob_cover_away = round(100.0 - prob_cover_home, 1)
 
-                    # 1. EVALUAR GANADOR (MONEYLINE) CON FILTRO EV+ PROFESIONAL (+5% a +25%)
+                    # 1. EVALUAR GANADOR (MONEYLINE) CON EV+ SEGURO Y KELLY
                     if prob_elo_home >= min_prob_filtro:
                         p_val = round(prob_elo_home, 1)
                         momio_ml = convertir_prob_a_momio_americano(p_val)
-                        dec_ml = convertir_momio_americano_decimal(momio_ml)
+                        dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
                         
                         if 5.0 <= ev_val <= 25.0:
-                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {p_val}% | {momio_ml} | +{ev_val}% | ✅ CONSENSO BLINDADO")
+                            kelly_pct = calcular_kelly(p_val, dec_ml)
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Local ({home_code}) | {p_val}% | {momio_ml} | +{ev_val}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
                             
                     if prob_elo_away >= min_prob_filtro:
                         p_val = round(prob_elo_away, 1)
                         momio_ml = convertir_prob_a_momio_americano(p_val)
-                        dec_ml = convertir_momio_americano_decimal(momio_ml)
+                        dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
                         
                         if 5.0 <= ev_val <= 25.0:
-                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Visita ({away_code}) | {p_val}% | {momio_ml} | +{ev_val}% | ✅ CONSENSO BLINDADO")
+                            kelly_pct = calcular_kelly(p_val, dec_ml)
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Gana Visita ({away_code}) | {p_val}% | {momio_ml} | +{ev_val}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
 
-                    # 2. EVALUAR HANDICAP / SPREAD CON FILTRO EV+ PROFESIONAL (+5% a +25%)
+                    # 2. EVALUAR HANDICAP / SPREAD CON EV+ SEGURO Y KELLY
                     momio_spread_raw = match_odds.get("spread_odds", "-110")
-                    dec_spread = convertir_momio_americano_decimal(momio_spread_raw)
+                    dec_spread = obtener_momio_decimal_seguro(match_odds, "spread", prob_cover_home)
 
                     if prob_cover_home >= min_prob_filtro:
                         ev_h_spread = round(((prob_cover_home / 100.0) * dec_spread - 1.0) * 100, 1)
                         if 5.0 <= ev_h_spread <= 25.0:
-                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Local ({home_code} {spread_api}) | {prob_cover_home}% | {momio_spread_raw} | +{ev_h_spread}% | ✅ CONSENSO BLINDADO")
+                            kelly_pct = calcular_kelly(prob_cover_home, dec_spread)
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Local ({home_code} {spread_api}) | {prob_cover_home}% | {momio_spread_raw} | +{ev_h_spread}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
 
                     if prob_cover_away >= min_prob_filtro:
-                        ev_a_spread = round(((prob_cover_away / 100.0) * dec_spread - 1.0) * 100, 1)
+                        dec_spread_away = obtener_momio_decimal_seguro(match_odds, "spread", prob_cover_away)
+                        ev_a_spread = round(((prob_cover_away / 100.0) * dec_spread_away - 1.0) * 100, 1)
                         if 5.0 <= ev_a_spread <= 25.0:
+                            kelly_pct = calcular_kelly(prob_cover_away, dec_spread_away)
                             spread_away_val = -spread_api if spread_api != 0 else 0.0
-                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Visita ({away_code} {spread_away_val:+}) | {prob_cover_away}% | {momio_spread_raw} | +{ev_a_spread}% | ✅ CONSENSO BLINDADO")
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Spread Visita ({away_code} {spread_away_val:+}) | {prob_cover_away}% | {momio_spread_raw} | +{ev_a_spread}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
 
-                    # 3. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER) CON FILTRO EV+ PROFESIONAL (+5% a +25%)
+                    # 3. EVALUAR TOTAL DEL PARTIDO (OVER / UNDER) CON EV+ SEGURO Y KELLY
                     es_over = (total_mc > linea_ou_api) and (total_ml > linea_ou_api) and (prob_over >= min_prob_filtro)
                     es_under = (total_mc < linea_ou_api) and (total_ml < linea_ou_api) and (prob_under >= min_prob_filtro)
                     
                     if es_over:
                         momio_o = match_odds.get("over_odds", "-110")
-                        dec_o = convertir_momio_americano_decimal(momio_o)
+                        dec_o = obtener_momio_decimal_seguro(match_odds, "over", prob_over)
                         ev_o = round(((prob_over / 100.0) * dec_o - 1.0) * 100, 1)
                         if 5.0 <= ev_o <= 25.0:
-                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Over {linea_ou_api} Pts | {prob_over}% | {momio_o} | +{ev_o}% | ✅ CONSENSO BLINDADO")
+                            kelly_pct = calcular_kelly(prob_over, dec_o)
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Over {linea_ou_api} Pts | {prob_over}% | {momio_o} | +{ev_o}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
                             
                     elif es_under:
                         momio_u = match_odds.get("under_odds", "-110")
-                        dec_u = convertir_momio_americano_decimal(momio_u)
+                        dec_u = obtener_momio_decimal_seguro(match_odds, "under", prob_under)
                         ev_u = round(((prob_under / 100.0) * dec_u - 1.0) * 100, 1)
                         if 5.0 <= ev_u <= 25.0:
-                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Under {linea_ou_api} Pts | {prob_under}% | {momio_u} | +{ev_u}% | ✅ CONSENSO BLINDADO")
+                            kelly_pct = calcular_kelly(prob_under, dec_u)
+                            apuestas_destacadas.append(f"`{fecha_partido}` | **{away_code} vs {home_code}** | Under {linea_ou_api} Pts | {prob_under}% | {momio_u} | +{ev_u}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
 
-                    # 4. EVALUAR YARDAS DE QBS CON FILTRO EV+ PROFESIONAL (+5% a +25%)
+                    # 4. EVALUAR YARDAS DE QBS CON EV+ SEGURO Y KELLY
                     if 'home_team' in df_qbs.columns and 'away_team' in df_qbs.columns:
                         qbs_partido = df_qbs[(df_qbs['home_team'] == home_code) | (df_qbs['away_team'] == away_code)]
                     elif 'posteam' in df_qbs.columns:
@@ -345,16 +375,20 @@ with pestana_escanner:
                             p_under_yds = res_qb['Prob_Under_Yardas']
                             
                             if p_over_yds >= min_prob_filtro:
-                                dec_qb = convertir_momio_americano_decimal("-110")
+                                dec_qb = obtener_momio_decimal_seguro({}, "qb", p_over_yds)
                                 ev_qb = round(((p_over_yds / 100.0) * dec_qb - 1.0) * 100, 1)
                                 if 5.0 <= ev_qb <= 25.0:
-                                    apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre}** | Over 245.5 Yds Pase | {p_over_yds}% | -110 | +{ev_qb}% | ✅ CONSENSO BLINDADO")
+                                    kelly_pct = calcular_kelly(p_over_yds, dec_qb)
+                                    mom_qb = convertir_prob_a_momio_americano(p_over_yds)
+                                    apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre}** | Over 245.5 Yds Pase | {p_over_yds}% | {mom_qb} | +{ev_qb}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
                                     
                             elif p_under_yds >= min_prob_filtro:
-                                dec_qb = convertir_momio_americano_decimal("-110")
+                                dec_qb = obtener_momio_decimal_seguro({}, "qb", p_under_yds)
                                 ev_qb = round(((p_under_yds / 100.0) * dec_qb - 1.0) * 100, 1)
                                 if 5.0 <= ev_qb <= 25.0:
-                                    apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre}** | Under 245.5 Yds Pase | {p_under_yds}% | -110 | +{ev_qb}% | ✅ CONSENSO BLINDADO")
+                                    kelly_pct = calcular_kelly(p_under_yds, dec_qb)
+                                    mom_qb = convertir_prob_a_momio_americano(p_under_yds)
+                                    apuestas_destacadas.append(f"`{fecha_partido}` | **QB {qb_nombre}** | Under 245.5 Yds Pase | {p_under_yds}% | {mom_qb} | +{ev_qb}% | 💰 Invertir: **{kelly_pct}% Bank** ✅")
 
                     detalles_juegos.append({
                         "juego": f"{away_code} @ {home_code}",
@@ -370,7 +404,7 @@ with pestana_escanner:
                 # --- RESUMEN DIRECTO ---
                 st.write("---")
                 if apuestas_destacadas:
-                    st.success(f"🎯 **¡Se encontraron {len(apuestas_destacadas)} Apuestas con Valor Real Profesional (EV+ 5% a 25%)!**")
+                    st.success(f"💎 **¡Se encontraron {len(apuestas_destacadas)} Inversiones de Nivel Institucional!**")
                     for ap in apuestas_destacadas:
                         st.markdown(f"- {ap}")
                 else:
@@ -391,14 +425,14 @@ with pestana_escanner:
                     with st.expander(f"📅 {d['fecha']} | 🏈 {d['juego']} | Score Proyectado: {eq_visita_j} {p_visita} - {p_local} {eq_local_j}"):
                         col_d1, col_d2 = st.columns(2)
                         with col_d1:
-                            st.markdown("**📊 Montecarlo & ELO**")
+                            st.markdown("**📊 Montecarlo (Poisson) & ELO**")
                             st.write(f"- Total Proyectado: **{score_dict.get('Total_Proyectado', 0)} pts** (Línea O/U: {d['linea']})")
                             st.write(f"- Spread Línea: **{d['spread']}**")
                             st.write(f"- Prob. Cover Spread ({eq_local_j}): **{d['prob_cover_home']}%**")
                             st.write(f"- Prob. Cover Spread ({eq_visita_j}): **{d['prob_cover_away']}%**")
                             st.write(f"- Prob. Victoria ELO ({eq_local_j}): **{round(d['prob_elo'], 1)}%**")
                         with col_d2:
-                            st.markdown("**🤖 Machine Learning & Clima**")
+                            st.markdown("**🤖 Machine Learning (EPA & Pace) & Clima**")
                             st.write(f"- Clima: {d['clima_str']}")
                             puntos_ml_entero = int(round(d['ml']['ML_Puntos_Totales_Esperados'], 0))
                             margen_ml_entero = round(d['ml']['ML_Margen_Local_Esperado'], 1)
