@@ -1,13 +1,23 @@
 import numpy as np
 import pandas as pd
 
-def obtener_metricas_equipo(df, equipo, es_local):
+def obtener_metricas_equipo(df, equipo, es_local, ultimos_n=17):
+    """
+    Filtra los datos para utilizar únicamente los últimos N juegos (1 temporada completa).
+    Esto elimina el sesgo estadístico de años anteriores.
+    """
+    # Ordenar cronológicamente para asegurar que agarramos los más recientes
+    if 'season' in df.columns and 'week' in df.columns:
+        df_ordenado = df.sort_values(by=['season', 'week'])
+    else:
+        df_ordenado = df.copy()
+
     if es_local:
-        juegos = df[df['home_team'] == equipo]
+        juegos = df_ordenado[df_ordenado['home_team'] == equipo].tail(ultimos_n)
         p = juegos['home_score'].dropna()
         pr = juegos['away_score'].dropna()
     else:
-        juegos = df[df['away_team'] == equipo]
+        juegos = df_ordenado[df_ordenado['away_team'] == equipo].tail(ultimos_n)
         p = juegos['away_score'].dropna()
         pr = juegos['home_score'].dropna()
         
