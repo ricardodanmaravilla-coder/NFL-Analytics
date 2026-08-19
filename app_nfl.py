@@ -133,21 +133,19 @@ def convertir_prob_a_momio_americano(prob_porcentaje):
     return str(americano)
 
 # --- FUNCIONES INSTITUCIONALES (KELLY & ODDS SEGUROS) ---
-def obtener_momio_decimal_seguro(match_odds_dict, tipo_mercado, prob_modelo):
-    """Obtiene el momio real o calcula el justo para no desvirtuar el EV+"""
+def obtener_momio_decimal_seguro(match_odds_dict, tipo_mercado, prob_modelo, es_local=True):
     try:
         if tipo_mercado == "over":
-            raw_odds = match_odds_dict.get("over_odds", "-110")
-            return convertir_momio_americano_decimal(raw_odds)
+            return convertir_momio_americano_decimal(match_odds_dict.get("over_odds", "-110"))
         elif tipo_mercado == "under":
-            raw_odds = match_odds_dict.get("under_odds", "-110")
-            return convertir_momio_americano_decimal(raw_odds)
+            return convertir_momio_americano_decimal(match_odds_dict.get("under_odds", "-110"))
         elif tipo_mercado == "spread":
-            raw_odds = match_odds_dict.get("spread_odds", "-110")
-            return convertir_momio_americano_decimal(raw_odds)
-        else:
-            momio_amer = convertir_prob_a_momio_americano(prob_modelo)
-            return convertir_momio_americano_decimal(momio_amer)
+            return convertir_momio_americano_decimal(match_odds_dict.get("spread_odds", "-110"))
+        elif tipo_mercado == "ml":
+            key = "ml_home_odds" if es_local else "ml_away_odds"
+            return convertir_momio_americano_decimal(match_odds_dict.get(key, "-110"))
+        else: # QB Props
+            return 1.91 # Fallback estándar
     except:
         return 1.91
 
@@ -169,47 +167,51 @@ def obtener_odds_espn_real(semana, temporada=2026):
         "KC":  "KC",  "LV":  "LV",  "LAC": "LAC", "LAR": "LA",  "MIA": "MIA",
         "MIN": "MIN", "NE":  "NE",  "NO":  "NO",  "NYG": "NYG", "NYJ": "NYJ",
         "PHI": "PHI", "PIT": "PIT", "SF":  "SF",  "SEA": "SEA", "TB":  "TB",
-        "TEN": "TEN", "WSH": "WAS", "WSH": "WAS"
+        "TEN": "TEN", "WSH": "WAS"
     }
+
+    def spread_to_ml(spread):
+        # Conversor institucional Spread -> Moneyline Americano
+        if spread == 0: return "-110", "-110"
+        elif spread < 0:
+            if spread >= -2.5: return "-130", "+110"
+            elif spread >= -3.5: return "-170", "+150"
+            elif spread >= -6.5: return "-250", "+200"
+            elif spread >= -9.5: return "-400", "+300"
+            else: return "-600", "+450"
+        else:
+            if spread <= 2.5: return "+110", "-130"
+            elif spread <= 3.5: return "+150", "-170"
+            elif spread <= 6.5: return "+200", "-250"
+            elif spread <= 9.5: return "+300", "-400"
+            else: return "+450", "-600"
 
     odds_dict = {}
     try:
         res = requests.get(url, timeout=5).json()
-        events = res.get("events", [])
-        
-        for event in events:
-            competitions = event.get("competitions", [])
-            if not competitions:
-                continue
-            
-            comp = competitions[0]
-            competitors = comp.get("competitors", [])
-            
-            home_code = None
-            for team in competitors:
-                if team.get("homeAway") == "home":
-                    raw_abbrev = team.get("team", {}).get("abbreviation")
-                    home_code = espn_to_std.get(raw_abbrev, raw_abbrev)
+        for event in res.get("events", []):
+            comp = event.get("competitions", [])[0]
+            home_code = next((espn_to_std.get(t.get("team", {}).get("abbreviation"), t.get("team", {}).get("abbreviation")) for t in comp.get("competitors", []) if t.get("homeAway") == "home"), None)
             
             odds_list = comp.get("odds", [])
             if odds_list and home_code:
                 first_odds = odds_list[0]
-                total_line = first_odds.get("overUnder", 45.5)
-                over_odds = first_odds.get("overOdds", "-110")
-                under_odds = first_odds.get("underOdds", "-110")
-                spread_line = first_odds.get("spread", -3.0)
-                spread_odds = first_odds.get("spreadOdds", "-110")
+                spread_line = float(first_odds.get("spread", -3.0))
+                
+                # Rescate de Moneyline
+                ml_home, ml_away = spread_to_ml(spread_line)
                 
                 odds_dict[home_code] = {
-                    "total": float(total_line) if total_line else 45.5,
-                    "over_odds": over_odds,
-                    "under_odds": under_odds,
-                    "spread": float(spread_line) if spread_line else -3.0,
-                    "spread_odds": spread_odds
+                    "total": float(first_odds.get("overUnder", 45.5)),
+                    "over_odds": first_odds.get("overOdds", "-110"),
+                    "under_odds": first_odds.get("underOdds", "-110"),
+                    "spread": spread_line,
+                    "spread_odds": first_odds.get("spreadOdds", "-110"),
+                    "ml_home_odds": ml_home,
+                    "ml_away_odds": ml_away
                 }
     except:
         pass
-
     return odds_dict
 
 def obtener_calendario_nfl(temporada, semana):
@@ -298,7 +300,7 @@ with pestana_escanner:
                     prob_mc_home = mc['Spread']['Cubre Local']
                     
                     diff_hist_base = (ml['ML_Puntos_Totales_Esperados'] / 2.0)
-                    prob_xgb_home = xgb_engine.predecir_probabilidad_cover(semana_auto, spread_api, diff_hist_base)
+                    prob_xgb_home = xgb_engine.predecir_probabilidad_cover(semana_auto, spread_api, linea_ou_api)
                     if prob_xgb_home == 50.0:
                         prob_xgb_home = prob_mc_home
 
@@ -313,7 +315,7 @@ with pestana_escanner:
                     if prob_elo_home >= min_prob_filtro:
                         p_val = round(prob_elo_home, 1)
                         momio_ml = convertir_prob_a_momio_americano(p_val)
-                        dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val)
+                       dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val, es_local=True)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
                         
                         if 5.0 <= ev_val <= 25.0:
@@ -323,7 +325,7 @@ with pestana_escanner:
                     if prob_elo_away >= min_prob_filtro:
                         p_val = round(prob_elo_away, 1)
                         momio_ml = convertir_prob_a_momio_americano(p_val)
-                        dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val)
+                        dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val, es_local=False)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
                         
                         if 5.0 <= ev_val <= 25.0:
