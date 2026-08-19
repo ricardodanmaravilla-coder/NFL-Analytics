@@ -315,7 +315,7 @@ with pestana_escanner:
                     if prob_elo_home >= min_prob_filtro:
                         p_val = round(prob_elo_home, 1)
                         momio_ml = convertir_prob_a_momio_americano(p_val)
-                       dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val, es_local=True)
+                        dec_ml = obtener_momio_decimal_seguro(match_odds, "ml", p_val, es_local=True)
                         ev_val = round(((p_val / 100.0) * dec_ml - 1.0) * 100, 1)
                         
                         if 5.0 <= ev_val <= 25.0:
