@@ -21,17 +21,23 @@ class PredictorNFL_ML:
             'KC': 900, 'DAL': 550, 'GB': 700, 'CAR': 750
         }
 
-    def _calcular_poderes_unidades(self, df_games):
-        """Calcula Poder, Ritmo (Pace) y Eficiencia Neta (EPA Proxy)"""
-        home_off = df_games.groupby('home_team')['home_score'].mean().to_dict()
-        home_def = df_games.groupby('home_team')['away_score'].mean().to_dict()
-        away_off = df_games.groupby('away_team')['away_score'].mean().to_dict()
-        away_def = df_games.groupby('away_team')['home_score'].mean().to_dict()
+    def _calcular_poderes_unidades(self, df_games, ultimos_n=17):
+        """Calcula Poder, Ritmo (Pace) y Eficiencia Neta basado SOLO en los últimos 17 juegos por equipo"""
+        if 'season' in df_games.columns and 'week' in df_games.columns:
+            df_sorted = df_games.sort_values(by=['season', 'week'])
+        else:
+            df_sorted = df_games.copy()
+
+        # Aislar los últimos N partidos para evitar el sesgo de 2020-2023
+        home_off = df_sorted.groupby('home_team').tail(ultimos_n).groupby('home_team')['home_score'].mean().to_dict()
+        home_def = df_sorted.groupby('home_team').tail(ultimos_n).groupby('home_team')['away_score'].mean().to_dict()
+        away_off = df_sorted.groupby('away_team').tail(ultimos_n).groupby('away_team')['away_score'].mean().to_dict()
+        away_def = df_sorted.groupby('away_team').tail(ultimos_n).groupby('away_team')['home_score'].mean().to_dict()
         
-        # Ritmo de juego (Puntos totales combinados en sus partidos)
-        df_games['total_pts_game'] = df_games['home_score'] + df_games['away_score']
-        pace_home = df_games.groupby('home_team')['total_pts_game'].mean().to_dict()
-        pace_away = df_games.groupby('away_team')['total_pts_game'].mean().to_dict()
+        # Ritmo de juego (Puntos totales combinados en sus últimos partidos)
+        df_sorted['total_pts_game'] = df_sorted['home_score'] + df_sorted['away_score']
+        pace_home = df_sorted.groupby('home_team').tail(ultimos_n).groupby('home_team')['total_pts_game'].mean().to_dict()
+        pace_away = df_sorted.groupby('away_team').tail(ultimos_n).groupby('away_team')['total_pts_game'].mean().to_dict()
         
         teams = set(list(home_off.keys()) + list(away_off.keys()))
         
@@ -68,7 +74,6 @@ class PredictorNFL_ML:
         df['away_offense_power'] = df['away_team'].map(self.power_off).fillna(22.0)
         df['away_defense_power'] = df['away_team'].map(self.power_def).fillna(22.0)
         
-        # Nuevas variables institucionales
         df['home_efficiency'] = df['home_team'].map(self.efficiency).fillna(0.0)
         df['away_efficiency'] = df['away_team'].map(self.efficiency).fillna(0.0)
         df['home_pace'] = df['home_team'].map(self.pace).fillna(44.0)
