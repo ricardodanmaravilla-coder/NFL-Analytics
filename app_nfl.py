@@ -380,7 +380,10 @@ with pestana_escanner:
 
                     if not qbs_partido.empty:
                         qb_nombre = qbs_partido['player_name'].dropna().iloc[0]
-                        res_qb = qb_engine.proyectar_yardas_qb(qb_nombre, 245.5)
+                        yardas_promedio_historico = qbs_partido['passing_yards'].tail(10).mean()
+                        linea_base_qb = round(yardas_promedio_historico, 1) if pd.notna(yardas_promedio_historico) else 235.5
+                        
+                        res_qb = qb_engine.proyectar_yardas_qb(qb_nombre, linea_base_qb)
                         if "error" not in res_qb:
                             p_over_yds = res_qb['Prob_Over_Yardas']
                             p_under_yds = res_qb['Prob_Under_Yardas']
