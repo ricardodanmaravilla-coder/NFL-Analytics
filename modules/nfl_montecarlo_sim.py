@@ -39,7 +39,6 @@ def _combinar_muestras(base, venue):
     venue = np.asarray(venue, dtype=float)
     if len(base) == 0:
         return np.array([], dtype=float)
-    # Los datos de venue reciben peso adicional, pero siguen siendo resultados reales.
     if len(venue) >= 3:
         return np.concatenate([base, venue])
     return base
@@ -48,16 +47,15 @@ def _combinar_muestras(base, venue):
 def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=None, n_simulaciones=None):
     """Distribución empírica determinista basada en marcadores reales.
 
-    Conserva el nombre histórico de la función por compatibilidad con la app, pero
-    ya no genera datos sintéticos ni usa números aleatorios. Enumera combinaciones
-    de muestras reales recientes de ataque/defensa para estimar el matchup.
+    `spread_local` conserva la semántica nflverse: +3 significa que el local es
+    favorito por 3; por ello cubre cuando margen_local > 3. No se usa RNG.
     """
     if df_games is None or df_games.empty:
         return {"Disponible": False, "Motivo": "Sin histórico real"}
 
     df = df_games.copy()
     if "game_type" in df.columns:
-        df = df[df["game_type"].isin(["REG", "POST"])].copy()
+        df = df[df["game_type"].isin(["REG", "POST", "WC", "DIV", "CON", "SB"])].copy()
     df = df[df["home_score"].notna() & df["away_score"].notna()]
 
     h = _muestras_equipo(df, local)
@@ -70,12 +68,9 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
     a_off = _combinar_muestras(a["general_pf"], a["away_pf"])
     a_def = _combinar_muestras(a["general_pa"], a["away_pa"])
 
-    # Cada score candidato es el promedio de dos observaciones reales:
-    # producción ofensiva propia y puntos permitidos por el rival.
     score_h = ((h_off[:, None] + a_def[None, :]) / 2.0).reshape(-1)
     score_a = ((a_off[:, None] + h_def[None, :]) / 2.0).reshape(-1)
 
-    # Enumeración determinista de todos los matchups de muestras; sin RNG.
     sh = score_h[:, None]
     sa = score_a[None, :]
     total = sh + sa
@@ -95,10 +90,10 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
             "Prob Push": round(float(np.sum(total == line) / n) * 100, 2),
         })
 
-    spread = {"Linea Local": spread_local, "Cubre Local": None, "Cubre Visita": None, "Push": None}
+    spread = {"Linea nflverse": spread_local, "Cubre Local": None, "Cubre Visita": None, "Push": None}
     if spread_local is not None and pd.notna(spread_local):
         line = float(spread_local)
-        adjusted = margin + line
+        adjusted = margin - line
         spread.update({
             "Cubre Local": round(float(np.sum(adjusted > 0) / n) * 100, 2),
             "Cubre Visita": round(float(np.sum(adjusted < 0) / n) * 100, 2),
