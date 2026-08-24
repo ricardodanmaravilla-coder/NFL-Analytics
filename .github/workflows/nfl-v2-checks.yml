@@ -1,0 +1,58 @@
+name: NFL V2 checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Refresh real nflverse data in runner
+        run: python descargar_historico_nfl.py
+      - name: Compile
+        run: python -m py_compile app_nfl_v2.py backtest_nfl_v2.py modules/*.py descargar_historico_nfl.py
+      - name: ML and empirical engines smoke
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from modules.nfl_ml_engine import PredictorNFL_ML
+          from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
+          from modules.nfl_xgb_engine import PredictorXGBoostSpread
+          df=pd.read_csv('data/historico_nfl_games.csv')
+          ml=PredictorNFL_ML(); assert ml.entrenar(df)
+          r=ml.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
+          assert r and r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
+          mc=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
+          assert mc['Disponible'] is True
+          assert mc['Over_Under']['Prob Over'] is not None
+          assert mc['Spread']['Push'] is not None
+          x=PredictorXGBoostSpread(); assert x.entrenar(df)
+          p=x.predecir_probabilidad_cover(1,2.5,47.5,'KC','BUF',7,7)
+          assert p is not None and 0 <= p <= 100
+          print(r, mc['Moneyline'], mc['Spread'], p, x.oos_accuracy, x.oos_brier)
+          PY
+      - name: Chronological market backtest
+        run: python backtest_nfl_v2.py | tee /tmp/backtest.txt
+      - name: Streamlit V2 startup
+        run: |
+          streamlit run app_nfl_v2.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
+          PID=$!
+          READY=0
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:8501/_stcore/health; then READY=1; break; fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then cat /tmp/streamlit.log; kill $PID || true; exit 1; fi
+          kill $PID || true
+      - name: Reject fabricated-market patterns
+        run: |
+          ! grep -R "spread_to_ml" app_nfl_v2.py
+          ! grep -R 'return 1.91' app_nfl_v2.py modules
+          ! grep -R 'fillna(-3.0)' modules/nfl_xgb_engine.py
+          ! grep -R "df\['total'\].*total_line" modules/nfl_xgb_engine.py
