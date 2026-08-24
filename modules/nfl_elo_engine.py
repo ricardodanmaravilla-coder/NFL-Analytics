@@ -1,59 +1,56 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 
 class MotorELONFL:
     def __init__(self, k_factor=20, home_advantage=48):
-        self.k_factor = k_factor
-        self.home_advantage = home_advantage
+        self.k_factor = float(k_factor)
+        self.home_advantage = float(home_advantage)
         self.ratings = {}
 
     def inicializar_ratings(self, equipos):
-        for eq in equipos:
-            self.ratings[eq] = 1500.0
+        self.ratings = {eq: 1500.0 for eq in equipos}
 
     def calcular_probabilidad_elo(self, elo_local, elo_visita):
-        diff = (elo_local + self.home_advantage) - elo_visita
+        diff = (float(elo_local) + self.home_advantage) - float(elo_visita)
         return 1.0 / (1.0 + 10.0 ** (-diff / 400.0))
 
     def actualizar_ratings(self, df_games):
-        equipos = sorted(list(set(df_games['home_team'].dropna().unique()) | set(df_games['away_team'].dropna().unique())))
-        self.inicializar_ratings(equipos)
-        
-        df_ordenado = df_games.sort_values(by=['season', 'week'])
-        temporada_actual = None
-        
-        for _, row in df_ordenado.iterrows():
-            temporada_juego = row['season']
-            
-            # FIX SESGO: Regresión a la media entre temporadas (33%)
-            if temporada_actual is not None and temporada_juego > temporada_actual:
-                for eq in self.ratings:
-                    self.ratings[eq] = (self.ratings[eq] * 0.67) + (1500.0 * 0.33)
-            temporada_actual = temporada_juego
+        df = df_games.copy()
+        if "game_type" in df.columns:
+            df = df[df["game_type"].isin(["REG", "POST", "WC", "DIV", "CON", "SB"])].copy()
+        df = df[df["home_score"].notna() & df["away_score"].notna()].copy()
 
-            home = row['home_team']
-            away = row['away_team']
-            home_score = row['home_score']
-            away_score = row['away_score']
-            
-            if pd.isna(home_score) or pd.isna(away_score) or home not in self.ratings or away not in self.ratings:
+        equipos = sorted(set(df["home_team"].dropna()) | set(df["away_team"].dropna()))
+        self.inicializar_ratings(equipos)
+
+        sort_cols = [c for c in ["season", "week", "gameday", "game_id"] if c in df.columns]
+        if sort_cols:
+            df = df.sort_values(sort_cols)
+
+        temporada_actual = None
+        for _, row in df.iterrows():
+            season = row.get("season")
+            if temporada_actual is not None and pd.notna(season) and season > temporada_actual:
+                for eq in self.ratings:
+                    self.ratings[eq] = self.ratings[eq] * 0.67 + 1500.0 * 0.33
+            if pd.notna(season):
+                temporada_actual = season
+
+            home, away = row.get("home_team"), row.get("away_team")
+            if home not in self.ratings or away not in self.ratings:
                 continue
-                
-            elo_home = self.ratings[home]
-            elo_away = self.ratings[away]
+            hs, aws = float(row["home_score"]), float(row["away_score"])
+            elo_home, elo_away = self.ratings[home], self.ratings[away]
             prob_home = self.calcular_probabilidad_elo(elo_home, elo_away)
-            
-            if home_score > away_score: resultado_real = 1.0
-            elif away_score > home_score: resultado_real = 0.0
-            else: resultado_real = 0.5
-                
-            diff_puntos = abs(home_score - away_score)
-            mult_mov = np.log(max(diff_puntos, 1) + 1) * (2.2 / (float(abs(elo_home - elo_away)) * 0.001 + 2.2))
-            
-            cambio = self.k_factor * mult_mov * (resultado_real - prob_home)
+            resultado = 1.0 if hs > aws else (0.0 if aws > hs else 0.5)
+
+            mov = abs(hs - aws)
+            mult_mov = np.log(max(mov, 1.0) + 1.0) * (2.2 / (abs(elo_home - elo_away) * 0.001 + 2.2))
+            cambio = self.k_factor * mult_mov * (resultado - prob_home)
             self.ratings[home] += cambio
             self.ratings[away] -= cambio
-            
+
         return self.ratings
 
     def obtener_power_ranking(self):
