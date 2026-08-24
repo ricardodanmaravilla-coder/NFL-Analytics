@@ -16,7 +16,7 @@ jobs:
       - name: Refresh real nflverse data in runner
         run: python descargar_historico_nfl.py
       - name: Compile
-        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py modules/*.py descargar_historico_nfl.py
+        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py test_streamlit_nfl_v2.py modules/*.py descargar_historico_nfl.py
       - name: ML and empirical engines smoke
         run: |
           python - <<'PY'
@@ -52,6 +52,8 @@ jobs:
           done
           if [ "$READY" -ne 1 ]; then cat /tmp/streamlit.log; kill $PID || true; exit 1; fi
           kill $PID || true
+      - name: Real Streamlit interaction smoke
+        run: python test_streamlit_nfl_v2.py
       - name: Conservative production guardrails
         run: |
           grep -q 'NO AUTO BET — OOS insuficiente' app_nfl_final.py
