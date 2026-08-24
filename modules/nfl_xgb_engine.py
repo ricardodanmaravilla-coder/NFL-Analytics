@@ -6,7 +6,11 @@ from modules.nfl_ml_engine import PredictorNFL_ML
 
 
 class PredictorXGBoostSpread:
-    """Modelo ATS usando líneas reales y features disponibles prepartido."""
+    """Modelo ATS usando líneas reales y features disponibles prepartido.
+
+    nflverse `spread_line` es positiva cuando el equipo local es favorito por esa
+    cantidad. Por ello el local cubre cuando `margen_local > spread_line`.
+    """
 
     def __init__(self):
         self.modelo = xgb.XGBClassifier(
@@ -41,10 +45,9 @@ class PredictorXGBoostSpread:
         df["spread_line"] = pd.to_numeric(df["spread_line"], errors="coerce")
         df["total_line"] = pd.to_numeric(df["total_line"], errors="coerce")
 
-        # Push no es derrota ni victoria ATS: se excluye del target binario.
-        adjusted = df["margen_local"] + df["spread_line"]
+        adjusted = df["margen_local"] - df["spread_line"]
         df = df[adjusted.notna() & (adjusted != 0)].copy()
-        df["cubre_spread_home"] = (df["margen_local"] + df["spread_line"] > 0).astype(int)
+        df["cubre_spread_home"] = (df["margen_local"] - df["spread_line"] > 0).astype(int)
 
         self.features = [
             "week", "spread_line", "total_line",
