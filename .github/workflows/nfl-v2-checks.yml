@@ -16,7 +16,7 @@ jobs:
       - name: Refresh real nflverse data in runner
         run: python descargar_historico_nfl.py
       - name: Compile
-        run: python -m py_compile app_nfl_v2.py backtest_nfl_v2.py modules/*.py descargar_historico_nfl.py
+        run: python -m py_compile app_nfl_v2.py backtest_nfl_v2.py backtest_nfl_value_v2.py modules/*.py descargar_historico_nfl.py
       - name: ML and empirical engines smoke
         run: |
           python - <<'PY'
@@ -37,8 +37,10 @@ jobs:
           assert p is not None and 0 <= p <= 100
           print(r, mc['Moneyline'], mc['Spread'], p, x.oos_accuracy, x.oos_brier)
           PY
-      - name: Chronological market backtest
+      - name: Chronological predictive backtest
         run: python backtest_nfl_v2.py | tee /tmp/backtest.txt
+      - name: 2025 real-odds value backtest
+        run: python backtest_nfl_value_v2.py | tee /tmp/value_backtest.txt
       - name: Streamlit V2 startup
         run: |
           streamlit run app_nfl_v2.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
