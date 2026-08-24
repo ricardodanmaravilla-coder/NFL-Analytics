@@ -1,6 +1,7 @@
 streamlit
 pandas
 numpy
+requests
 nfl_data_py
 scikit-learn
 xgboost
