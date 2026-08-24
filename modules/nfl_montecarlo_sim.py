@@ -1,82 +1,120 @@
 import numpy as np
 import pandas as pd
 
-def obtener_metricas_equipo(df, equipo, es_local, ultimos_n=17):
-    """
-    Filtra los datos para utilizar únicamente los últimos N juegos (1 temporada completa).
-    Esto elimina el sesgo estadístico de años anteriores.
-    """
-    # Ordenar cronológicamente para asegurar que agarramos los más recientes
-    if 'season' in df.columns and 'week' in df.columns:
-        df_ordenado = df.sort_values(by=['season', 'week'])
-    else:
-        df_ordenado = df.copy()
 
-    if es_local:
-        juegos = df_ordenado[df_ordenado['home_team'] == equipo].tail(ultimos_n)
-        p = juegos['home_score'].dropna()
-        pr = juegos['away_score'].dropna()
-    else:
-        juegos = df_ordenado[df_ordenado['away_team'] == equipo].tail(ultimos_n)
-        p = juegos['away_score'].dropna()
-        pr = juegos['home_score'].dropna()
-        
-    if len(juegos) < 5:
-        return {"anotados_mean": 21.0, "anotados_std": 7.0, "recibidos_mean": 21.0, "recibidos_std": 7.0}
-        
+def _ordenar(df):
+    cols = [c for c in ["season", "week", "gameday", "game_id"] if c in df.columns]
+    return df.sort_values(cols) if cols else df.copy()
+
+
+def _muestras_equipo(df, equipo, ultimos_n=17, venue_n=8):
+    """Devuelve únicamente marcadores reales previos del equipo.
+
+    Se usan los últimos N juegos generales y, con peso adicional, los últimos juegos
+    en la condición local/visita correspondiente. No se generan Normal/Poisson ni
+    se rellenan muestras faltantes con promedios ficticios.
+    """
+    df = _ordenar(df)
+    home = df[df["home_team"] == equipo].copy()
+    away = df[df["away_team"] == equipo].copy()
+
+    general = pd.concat([
+        home.assign(pf=home["home_score"], pa=home["away_score"])[["season", "week", "pf", "pa"]],
+        away.assign(pf=away["away_score"], pa=away["home_score"])[["season", "week", "pf", "pa"]],
+    ], ignore_index=True)
+    general = general.dropna(subset=["pf", "pa"]).sort_values(["season", "week"]).tail(ultimos_n)
+
     return {
-        "anotados_mean": p.mean(), "anotados_std": p.std(),
-        "recibidos_mean": pr.mean(), "recibidos_std": pr.std()
+        "general_pf": general["pf"].to_numpy(dtype=float),
+        "general_pa": general["pa"].to_numpy(dtype=float),
+        "home_pf": home.dropna(subset=["home_score"]).tail(venue_n)["home_score"].to_numpy(dtype=float),
+        "home_pa": home.dropna(subset=["away_score"]).tail(venue_n)["away_score"].to_numpy(dtype=float),
+        "away_pf": away.dropna(subset=["away_score"]).tail(venue_n)["away_score"].to_numpy(dtype=float),
+        "away_pa": away.dropna(subset=["home_score"]).tail(venue_n)["home_score"].to_numpy(dtype=float),
     }
 
-def simular_nfl_montecarlo(local, visita, df_games, linea_ou=45.5, spread_local=-3.0, n_simulaciones=1000000):
-    stats_local = obtener_metricas_equipo(df_games, local, True)
-    stats_visita = obtener_metricas_equipo(df_games, visita, False)
-    
-    exp_puntos_local = (stats_local["anotados_mean"] + stats_visita["recibidos_mean"]) / 2.0
-    std_puntos_local = (stats_local["anotados_std"] + stats_visita["recibidos_std"]) / 2.0
-    
-    exp_puntos_visita = (stats_visita["anotados_mean"] + stats_local["recibidos_mean"]) / 2.0
-    std_puntos_visita = (stats_visita["anotados_std"] + stats_local["recibidos_std"]) / 2.0
 
-    # 1. Simulación Normal (Fluida)
-    sim_norm_loc = np.random.normal(loc=exp_puntos_local, scale=std_puntos_local, size=n_simulaciones)
-    sim_norm_vis = np.random.normal(loc=exp_puntos_visita, scale=std_puntos_visita, size=n_simulaciones)
-    
-    # 2. Simulación Poisson (Eventos Discretos, Clave para la NFL)
-    sim_pois_loc = np.random.poisson(lam=exp_puntos_local, size=n_simulaciones)
-    sim_pois_vis = np.random.poisson(lam=exp_puntos_visita, size=n_simulaciones)
-    
-    # Blending (Fusión) de ambos mundos para perfección matemática
-    sim_local = np.round((sim_norm_loc + sim_pois_loc) / 2.0)
-    sim_visita = np.round((sim_norm_vis + sim_pois_vis) / 2.0)
-    
-    sim_local = np.maximum(0, sim_local)
-    sim_visita = np.maximum(0, sim_visita)
-    
-    # Tiempo Extra
-    empates = sim_local == sim_visita
-    if np.any(empates):
-        moneda = np.random.choice([3, -3], size=np.sum(empates))
-        sim_local[empates] += np.where(moneda == 3, 3, 0)
-        sim_visita[empates] += np.where(moneda == -3, 3, 0)
-        
-    puntos_totales = sim_local + sim_visita
-    margen_local = sim_local - sim_visita
+def _combinar_muestras(base, venue):
+    base = np.asarray(base, dtype=float)
+    venue = np.asarray(venue, dtype=float)
+    if len(base) == 0:
+        return np.array([], dtype=float)
+    if len(venue) >= 3:
+        return np.concatenate([base, venue])
+    return base
 
-    prob_gana_local = np.sum(sim_local > sim_visita) / n_simulaciones
-    prob_over = np.sum(puntos_totales > linea_ou) / n_simulaciones
-    prob_under = np.sum(puntos_totales < linea_ou) / n_simulaciones
-    
-    prob_cubre_local = np.sum(margen_local > -spread_local) / n_simulaciones
-    prob_cubre_visita = 1.0 - prob_cubre_local
-    
+
+def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=None, n_simulaciones=None):
+    """Distribución empírica determinista basada en marcadores reales.
+
+    `spread_local` conserva la semántica nflverse: +3 significa que el local es
+    favorito por 3; por ello cubre cuando margen_local > 3. No se usa RNG.
+    """
+    if df_games is None or df_games.empty:
+        return {"Disponible": False, "Motivo": "Sin histórico real"}
+
+    df = df_games.copy()
+    if "game_type" in df.columns:
+        df = df[df["game_type"].isin(["REG", "POST", "WC", "DIV", "CON", "SB"])].copy()
+    df = df[df["home_score"].notna() & df["away_score"].notna()]
+
+    h = _muestras_equipo(df, local)
+    a = _muestras_equipo(df, visita)
+    if len(h["general_pf"]) < 5 or len(a["general_pf"]) < 5:
+        return {"Disponible": False, "Motivo": "Menos de 5 juegos reales por equipo"}
+
+    h_off = _combinar_muestras(h["general_pf"], h["home_pf"])
+    h_def = _combinar_muestras(h["general_pa"], h["home_pa"])
+    a_off = _combinar_muestras(a["general_pf"], a["away_pf"])
+    a_def = _combinar_muestras(a["general_pa"], a["away_pa"])
+
+    score_h = ((h_off[:, None] + a_def[None, :]) / 2.0).reshape(-1)
+    score_a = ((a_off[:, None] + h_def[None, :]) / 2.0).reshape(-1)
+
+    sh = score_h[:, None]
+    sa = score_a[None, :]
+    total = sh + sa
+    margin = sh - sa
+    n = float(total.size)
+
+    p_home = float(np.sum(margin > 0) / n)
+    p_away = float(np.sum(margin < 0) / n)
+    p_tie = float(np.sum(margin == 0) / n)
+
+    ou = {"Linea": linea_ou, "Prob Over": None, "Prob Under": None, "Prob Push": None}
+    if linea_ou is not None and pd.notna(linea_ou):
+        line = float(linea_ou)
+        ou.update({
+            "Prob Over": round(float(np.sum(total > line) / n) * 100, 2),
+            "Prob Under": round(float(np.sum(total < line) / n) * 100, 2),
+            "Prob Push": round(float(np.sum(total == line) / n) * 100, 2),
+        })
+
+    spread = {"Linea nflverse": spread_local, "Cubre Local": None, "Cubre Visita": None, "Push": None}
+    if spread_local is not None and pd.notna(spread_local):
+        line = float(spread_local)
+        adjusted = margin - line
+        spread.update({
+            "Cubre Local": round(float(np.sum(adjusted > 0) / n) * 100, 2),
+            "Cubre Visita": round(float(np.sum(adjusted < 0) / n) * 100, 2),
+            "Push": round(float(np.sum(adjusted == 0) / n) * 100, 2),
+        })
+
     return {
+        "Disponible": True,
+        "Metodo": "Distribucion empirica de marcadores reales",
+        "Muestras_Local": int(len(h_off)),
+        "Muestras_Visita": int(len(a_off)),
         "Proyeccion_Score": {
-            local: round(exp_puntos_local, 1), visita: round(exp_puntos_visita, 1),
-            "Total_Proyectado": round(exp_puntos_local + exp_puntos_visita, 1)
+            local: round(float(np.mean(score_h)), 2),
+            visita: round(float(np.mean(score_a)), 2),
+            "Total_Proyectado": round(float(np.mean(score_h) + np.mean(score_a)), 2),
         },
-        "Moneyline": { "Gana Local": round(prob_gana_local * 100, 2), "Gana Visita": round((1-prob_gana_local) * 100, 2) },
-        "Over_Under": { "Linea": linea_ou, "Prob Over": round(prob_over * 100, 2), "Prob Under": round(prob_under * 100, 2) },
-        "Spread": { "Linea Local": spread_local, "Cubre Local": round(prob_cubre_local * 100, 2), "Cubre Visita": round(prob_cubre_visita * 100, 2) }
+        "Moneyline": {
+            "Gana Local": round(p_home * 100, 2),
+            "Gana Visita": round(p_away * 100, 2),
+            "Empate": round(p_tie * 100, 2),
+        },
+        "Over_Under": ou,
+        "Spread": spread,
     }

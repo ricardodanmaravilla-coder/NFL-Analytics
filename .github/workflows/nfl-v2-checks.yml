@@ -1,0 +1,64 @@
+name: NFL V2 checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Refresh real nflverse data in runner
+        run: python descargar_historico_nfl.py
+      - name: Compile
+        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py test_streamlit_nfl_v2.py modules/*.py descargar_historico_nfl.py
+      - name: ML and empirical engines smoke
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from modules.nfl_ml_engine import PredictorNFL_ML
+          from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
+          from modules.nfl_xgb_engine import PredictorXGBoostSpread
+          df=pd.read_csv('data/historico_nfl_games.csv')
+          ml=PredictorNFL_ML(); assert ml.entrenar(df)
+          r=ml.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
+          assert r and r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
+          emp=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
+          assert emp['Disponible'] is True
+          assert emp['Over_Under']['Prob Over'] is not None
+          assert emp['Spread']['Push'] is not None
+          x=PredictorXGBoostSpread(); assert x.entrenar(df)
+          p=x.predecir_probabilidad_cover(1,2.5,47.5,'KC','BUF',7,7)
+          assert p is not None and 0 <= p <= 100
+          print(r, emp['Moneyline'], emp['Spread'], p, x.oos_accuracy, x.oos_brier)
+          PY
+      - name: Chronological predictive backtest
+        run: python backtest_nfl_v2.py | tee /tmp/backtest.txt
+      - name: 2025 real-odds value backtest
+        run: python backtest_nfl_value_v2.py | tee /tmp/value_backtest.txt
+      - name: Production Streamlit startup
+        run: |
+          streamlit run app_nfl.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
+          PID=$!
+          READY=0
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:8501/_stcore/health; then READY=1; break; fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then cat /tmp/streamlit.log; kill $PID || true; exit 1; fi
+          kill $PID || true
+      - name: Real Streamlit interaction smoke
+        run: python test_streamlit_nfl_v2.py
+      - name: Conservative production guardrails
+        run: |
+          grep -q 'NO AUTO BET — OOS insuficiente' app_nfl_final.py
+          grep -q 'NO AUTO BET — ROI 2025 negativo' app_nfl_final.py
+          ! grep -R "spread_to_ml" app_nfl.py app_nfl_final.py
+          ! grep -R 'return 1.91' app_nfl.py app_nfl_final.py modules
+          ! grep -R 'fillna(-3.0)' modules/nfl_xgb_engine.py
+          ! grep -R "df\['total'\].*total_line" modules/nfl_xgb_engine.py
