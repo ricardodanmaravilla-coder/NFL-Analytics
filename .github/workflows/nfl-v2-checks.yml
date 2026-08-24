@@ -16,7 +16,7 @@ jobs:
       - name: Refresh real nflverse data in runner
         run: python descargar_historico_nfl.py
       - name: Compile
-        run: python -m py_compile app_nfl_v2.py backtest_nfl_v2.py backtest_nfl_value_v2.py modules/*.py descargar_historico_nfl.py
+        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py modules/*.py descargar_historico_nfl.py
       - name: ML and empirical engines smoke
         run: |
           python - <<'PY'
@@ -28,22 +28,22 @@ jobs:
           ml=PredictorNFL_ML(); assert ml.entrenar(df)
           r=ml.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
           assert r and r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
-          mc=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
-          assert mc['Disponible'] is True
-          assert mc['Over_Under']['Prob Over'] is not None
-          assert mc['Spread']['Push'] is not None
+          emp=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
+          assert emp['Disponible'] is True
+          assert emp['Over_Under']['Prob Over'] is not None
+          assert emp['Spread']['Push'] is not None
           x=PredictorXGBoostSpread(); assert x.entrenar(df)
           p=x.predecir_probabilidad_cover(1,2.5,47.5,'KC','BUF',7,7)
           assert p is not None and 0 <= p <= 100
-          print(r, mc['Moneyline'], mc['Spread'], p, x.oos_accuracy, x.oos_brier)
+          print(r, emp['Moneyline'], emp['Spread'], p, x.oos_accuracy, x.oos_brier)
           PY
       - name: Chronological predictive backtest
         run: python backtest_nfl_v2.py | tee /tmp/backtest.txt
       - name: 2025 real-odds value backtest
         run: python backtest_nfl_value_v2.py | tee /tmp/value_backtest.txt
-      - name: Streamlit V2 startup
+      - name: Production Streamlit startup
         run: |
-          streamlit run app_nfl_v2.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
+          streamlit run app_nfl.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
           PID=$!
           READY=0
           for i in {1..45}; do
@@ -52,9 +52,11 @@ jobs:
           done
           if [ "$READY" -ne 1 ]; then cat /tmp/streamlit.log; kill $PID || true; exit 1; fi
           kill $PID || true
-      - name: Reject fabricated-market patterns
+      - name: Conservative production guardrails
         run: |
-          ! grep -R "spread_to_ml" app_nfl_v2.py
-          ! grep -R 'return 1.91' app_nfl_v2.py modules
+          grep -q 'NO AUTO BET — OOS insuficiente' app_nfl_final.py
+          grep -q 'NO AUTO BET — ROI 2025 negativo' app_nfl_final.py
+          ! grep -R "spread_to_ml" app_nfl.py app_nfl_final.py
+          ! grep -R 'return 1.91' app_nfl.py app_nfl_final.py modules
           ! grep -R 'fillna(-3.0)' modules/nfl_xgb_engine.py
           ! grep -R "df\['total'\].*total_line" modules/nfl_xgb_engine.py
