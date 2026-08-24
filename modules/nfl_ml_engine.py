@@ -1,136 +1,206 @@
-import pandas as pd
+from collections import defaultdict, deque
+
 import numpy as np
+import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+
 
 class PredictorNFL_ML:
+    """Predice total y margen usando únicamente información disponible antes del kickoff.
+
+    Las variables rolling se construyen secuencialmente: cada partido se convierte en
+    una fila de entrenamiento ANTES de agregar su resultado al historial del equipo.
+    Así se evita que juegos futuros contaminen juegos antiguos.
+    """
+
     def __init__(self):
-        self.scaler = StandardScaler()
-        self.modelo_puntos_totales = RandomForestRegressor(n_estimators=100, random_state=42, max_depth=10)
-        self.modelo_margen = RandomForestRegressor(n_estimators=100, random_state=42, max_depth=10)
+        self.modelo_puntos_totales = RandomForestRegressor(
+            n_estimators=250, max_depth=9, min_samples_leaf=6,
+            random_state=42, n_jobs=1
+        )
+        self.modelo_margen = RandomForestRegressor(
+            n_estimators=250, max_depth=9, min_samples_leaf=6,
+            random_state=43, n_jobs=1
+        )
         self.is_trained = False
-        
-        self.power_off = {}
-        self.power_def = {}
-        self.pace = {}
-        self.efficiency = {}
-        
+        self.features_cols = []
+        self.historial_actual = {}
+        self.residuales_total = np.array([], dtype=float)
+        self.residuales_margen = np.array([], dtype=float)
+
         self.altitud_estadios = {
-            'DEN': 5280, 'ARI': 1090, 'ATL': 1050, 'LV': 2000, 
-            'KC': 900, 'DAL': 550, 'GB': 700, 'CAR': 750
+            "DEN": 5280, "ARI": 1090, "ATL": 1050, "LV": 2000,
+            "KC": 900, "DAL": 550, "GB": 700, "CAR": 750,
         }
 
-    def _calcular_poderes_unidades(self, df_games, ultimos_n=17):
-        """Calcula Poder, Ritmo (Pace) y Eficiencia Neta basado SOLO en los últimos 17 juegos por equipo"""
-        if 'season' in df_games.columns and 'week' in df_games.columns:
-            df_sorted = df_games.sort_values(by=['season', 'week'])
-        else:
-            df_sorted = df_games.copy()
+    @staticmethod
+    def _media(vals, n):
+        vals = list(vals)[-n:]
+        return float(np.mean(vals)) if vals else np.nan
 
-        # Aislar los últimos N partidos para evitar el sesgo de 2020-2023
-        home_off = df_sorted.groupby('home_team').tail(ultimos_n).groupby('home_team')['home_score'].mean().to_dict()
-        home_def = df_sorted.groupby('home_team').tail(ultimos_n).groupby('home_team')['away_score'].mean().to_dict()
-        away_off = df_sorted.groupby('away_team').tail(ultimos_n).groupby('away_team')['away_score'].mean().to_dict()
-        away_def = df_sorted.groupby('away_team').tail(ultimos_n).groupby('away_team')['home_score'].mean().to_dict()
-        
-        # Ritmo de juego (Puntos totales combinados en sus últimos partidos)
-        df_sorted['total_pts_game'] = df_sorted['home_score'] + df_sorted['away_score']
-        pace_home = df_sorted.groupby('home_team').tail(ultimos_n).groupby('home_team')['total_pts_game'].mean().to_dict()
-        pace_away = df_sorted.groupby('away_team').tail(ultimos_n).groupby('away_team')['total_pts_game'].mean().to_dict()
-        
-        teams = set(list(home_off.keys()) + list(away_off.keys()))
-        
-        self.power_off = {}
-        self.power_def = {}
-        self.pace = {}
-        self.efficiency = {}
-        
-        for eq in teams:
-            pts_a_favor = []
-            pts_en_contra = []
-            if eq in home_off: pts_a_favor.append(home_off[eq])
-            if eq in away_off: pts_a_favor.append(away_off[eq])
-            if eq in home_def: pts_en_contra.append(home_def[eq])
-            if eq in away_def: pts_en_contra.append(away_def[eq])
-            
-            self.power_off[eq] = np.mean(pts_a_favor) if pts_a_favor else 22.0
-            self.power_def[eq] = np.mean(pts_en_contra) if pts_en_contra else 22.0
-            
-            # Eficiencia (Puntos anotados vs recibidos)
-            self.efficiency[eq] = self.power_off[eq] - self.power_def[eq]
-            
-            # Pace
-            p_h = pace_home.get(eq, 44.0)
-            p_a = pace_away.get(eq, 44.0)
-            self.pace[eq] = (p_h + p_a) / 2.0
+    @staticmethod
+    def _std(vals, n):
+        vals = list(vals)[-n:]
+        return float(np.std(vals, ddof=1)) if len(vals) >= 2 else np.nan
 
-    def _limpiar_y_preparar(self, df_games, df_qbs=None):
+    def _features_equipo(self, hist, team, prefijo):
+        h = hist[team]
+        return {
+            f"{prefijo}_off_5": self._media(h["pf"], 5),
+            f"{prefijo}_def_5": self._media(h["pa"], 5),
+            f"{prefijo}_margin_5": self._media(h["margin"], 5),
+            f"{prefijo}_total_5": self._media(h["total"], 5),
+            f"{prefijo}_off_17": self._media(h["pf"], 17),
+            f"{prefijo}_def_17": self._media(h["pa"], 17),
+            f"{prefijo}_margin_17": self._media(h["margin"], 17),
+            f"{prefijo}_total_17": self._media(h["total"], 17),
+            f"{prefijo}_score_sd_17": self._std(h["pf"], 17),
+        }
+
+    @staticmethod
+    def _nuevo_historial():
+        return defaultdict(lambda: {
+            "pf": deque(maxlen=34),
+            "pa": deque(maxlen=34),
+            "margin": deque(maxlen=34),
+            "total": deque(maxlen=34),
+        })
+
+    def construir_features_pregame(self, df_games):
         df = df_games.copy()
-        self._calcular_poderes_unidades(df)
-        
-        df['home_offense_power'] = df['home_team'].map(self.power_off).fillna(22.0)
-        df['home_defense_power'] = df['home_team'].map(self.power_def).fillna(22.0)
-        df['away_offense_power'] = df['away_team'].map(self.power_off).fillna(22.0)
-        df['away_defense_power'] = df['away_team'].map(self.power_def).fillna(22.0)
-        
-        df['home_efficiency'] = df['home_team'].map(self.efficiency).fillna(0.0)
-        df['away_efficiency'] = df['away_team'].map(self.efficiency).fillna(0.0)
-        df['home_pace'] = df['home_team'].map(self.pace).fillna(44.0)
-        df['away_pace'] = df['away_team'].map(self.pace).fillna(44.0)
-        
-        df['home_altitude'] = df['home_team'].map(self.altitud_estadios).fillna(50)
-        df['is_dome'] = df['roof'].apply(lambda x: 1 if str(x).lower() in ['dome', 'closed'] else 0)
-        
-        df['margen_local'] = df['home_score'] - df['away_score']
-        df['puntos_totales'] = df['home_score'] + df['away_score']
-        
-        features = [
-            'week', 'home_altitude', 'temp', 'wind', 'is_dome',
-            'home_offense_power', 'home_defense_power', 
-            'away_offense_power', 'away_defense_power',
-            'home_efficiency', 'away_efficiency', 'home_pace', 'away_pace'
-        ]
-        
-        df = df.dropna(subset=features + ['margen_local', 'puntos_totales'])
-        return df, features
+        if "game_type" in df.columns:
+            df = df[df["game_type"].isin(["REG", "POST"])].copy()
+        df = df[df["home_score"].notna() & df["away_score"].notna()].copy()
+        sort_cols = [c for c in ["season", "week", "gameday", "game_id"] if c in df.columns]
+        if sort_cols:
+            df = df.sort_values(sort_cols)
+
+        hist = self._nuevo_historial()
+        rows = []
+
+        for _, r in df.iterrows():
+            home, away = r.get("home_team"), r.get("away_team")
+            if not home or not away:
+                continue
+
+            # Requerimos historial real previo suficiente; no inventamos team power.
+            if len(hist[home]["pf"]) >= 4 and len(hist[away]["pf"]) >= 4:
+                row = {
+                    "game_id": r.get("game_id"),
+                    "season": r.get("season"),
+                    "week": r.get("week"),
+                    "home_team": home,
+                    "away_team": away,
+                    "home_altitude": float(self.altitud_estadios.get(home, 0.0)),
+                    "is_dome": 1 if str(r.get("roof", "")).lower() in {"dome", "closed"} else 0,
+                    "temp": pd.to_numeric(r.get("temp"), errors="coerce"),
+                    "wind": pd.to_numeric(r.get("wind"), errors="coerce"),
+                    "temp_missing": int(pd.isna(pd.to_numeric(r.get("temp"), errors="coerce"))),
+                    "wind_missing": int(pd.isna(pd.to_numeric(r.get("wind"), errors="coerce"))),
+                    "home_rest": pd.to_numeric(r.get("home_rest"), errors="coerce"),
+                    "away_rest": pd.to_numeric(r.get("away_rest"), errors="coerce"),
+                    "puntos_totales": float(r["home_score"] + r["away_score"]),
+                    "margen_local": float(r["home_score"] - r["away_score"]),
+                }
+                row.update(self._features_equipo(hist, home, "home"))
+                row.update(self._features_equipo(hist, away, "away"))
+                rows.append(row)
+
+            hs, aws = float(r["home_score"]), float(r["away_score"])
+            total = hs + aws
+            hist[home]["pf"].append(hs)
+            hist[home]["pa"].append(aws)
+            hist[home]["margin"].append(hs - aws)
+            hist[home]["total"].append(total)
+            hist[away]["pf"].append(aws)
+            hist[away]["pa"].append(hs)
+            hist[away]["margin"].append(aws - hs)
+            hist[away]["total"].append(total)
+
+        self.historial_actual = hist
+        out = pd.DataFrame(rows)
+        if out.empty:
+            return out
+
+        # NaN meteorológico/descanso se representa con sentinel 0 + indicador de missing;
+        # no se presenta como dato real ni se usa para apuestas si el dato actual falta.
+        for c in ["temp", "wind", "home_rest", "away_rest"]:
+            if c in out.columns:
+                out[c] = pd.to_numeric(out[c], errors="coerce").fillna(0.0)
+        return out
 
     def entrenar(self, df_games, df_qbs=None):
         try:
-            df_listo, self.features_cols = self._limpiar_y_preparar(df_games, df_qbs)
-            X = df_listo[self.features_cols]
-            y_puntos = df_listo['puntos_totales']
-            y_margen = df_listo['margen_local']
-            
-            X_scaled = self.scaler.fit_transform(X)
-            self.modelo_puntos_totales.fit(X_scaled, y_puntos)
-            self.modelo_margen.fit(X_scaled, y_margen)
+            df = self.construir_features_pregame(df_games)
+            if len(df) < 200:
+                return False
+
+            self.features_cols = [
+                "week", "home_altitude", "temp", "wind", "is_dome",
+                "temp_missing", "wind_missing", "home_rest", "away_rest",
+                "home_off_5", "home_def_5", "home_margin_5", "home_total_5",
+                "home_off_17", "home_def_17", "home_margin_17", "home_total_17", "home_score_sd_17",
+                "away_off_5", "away_def_5", "away_margin_5", "away_total_5",
+                "away_off_17", "away_def_17", "away_margin_17", "away_total_17", "away_score_sd_17",
+            ]
+            df = df.dropna(subset=[c for c in self.features_cols if c not in {"temp", "wind", "home_rest", "away_rest"}])
+            X = df[self.features_cols]
+            y_total = df["puntos_totales"]
+            y_margin = df["margen_local"]
+
+            # Calibración residual estrictamente cronológica: último 20% como holdout.
+            cut = max(150, int(len(df) * 0.80))
+            if cut < len(df) - 30:
+                self.modelo_puntos_totales.fit(X.iloc[:cut], y_total.iloc[:cut])
+                self.modelo_margen.fit(X.iloc[:cut], y_margin.iloc[:cut])
+                self.residuales_total = (y_total.iloc[cut:] - self.modelo_puntos_totales.predict(X.iloc[cut:])).to_numpy()
+                self.residuales_margen = (y_margin.iloc[cut:] - self.modelo_margen.predict(X.iloc[cut:])).to_numpy()
+
+            # Modelo final usa todo el histórico una vez calibrados los residuales.
+            self.modelo_puntos_totales.fit(X, y_total)
+            self.modelo_margen.fit(X, y_margin)
             self.is_trained = True
             return True
         except Exception as e:
             print(f"Error entrenando modelo ML NFL: {e}")
+            self.is_trained = False
             return False
 
-    def predecir_contexto(self, week, home_team, away_team, temp, wind, is_dome):
+    def predecir_contexto(self, week, home_team, away_team, temp, wind, is_dome, home_rest=None, away_rest=None):
         if not self.is_trained:
             return None
-            
-        datos_hoy = pd.DataFrame([{
-            'week': week,
-            'home_altitude': self.altitud_estadios.get(home_team, 50),
-            'temp': temp, 'wind': wind, 'is_dome': is_dome,
-            'home_offense_power': self.power_off.get(home_team, 22.0),
-            'home_defense_power': self.power_def.get(home_team, 22.0),
-            'away_offense_power': self.power_off.get(away_team, 22.0),
-            'away_defense_power': self.power_def.get(away_team, 22.0),
-            'home_efficiency': self.efficiency.get(home_team, 0.0),
-            'away_efficiency': self.efficiency.get(away_team, 0.0),
-            'home_pace': self.pace.get(home_team, 44.0),
-            'away_pace': self.pace.get(away_team, 44.0)
-        }])
-        
-        datos_scaled = self.scaler.transform(datos_hoy)
+        if home_team not in self.historial_actual or away_team not in self.historial_actual:
+            return None
+        if len(self.historial_actual[home_team]["pf"]) < 4 or len(self.historial_actual[away_team]["pf"]) < 4:
+            return None
+
+        temp_val = pd.to_numeric(temp, errors="coerce")
+        wind_val = pd.to_numeric(wind, errors="coerce")
+        row = {
+            "week": float(week),
+            "home_altitude": float(self.altitud_estadios.get(home_team, 0.0)),
+            "temp": 0.0 if pd.isna(temp_val) else float(temp_val),
+            "wind": 0.0 if pd.isna(wind_val) else float(wind_val),
+            "is_dome": int(bool(is_dome)),
+            "temp_missing": int(pd.isna(temp_val)),
+            "wind_missing": int(pd.isna(wind_val)),
+            "home_rest": 0.0 if home_rest is None or pd.isna(home_rest) else float(home_rest),
+            "away_rest": 0.0 if away_rest is None or pd.isna(away_rest) else float(away_rest),
+        }
+        row.update(self._features_equipo(self.historial_actual, home_team, "home"))
+        row.update(self._features_equipo(self.historial_actual, away_team, "away"))
+        datos = pd.DataFrame([row])[self.features_cols]
+
+        if datos.isna().any(axis=None):
+            return None
+
+        total = float(self.modelo_puntos_totales.predict(datos)[0])
+        margin = float(self.modelo_margen.predict(datos)[0])
+        sigma_total = float(np.std(self.residuales_total, ddof=1)) if len(self.residuales_total) >= 20 else None
+        sigma_margin = float(np.std(self.residuales_margen, ddof=1)) if len(self.residuales_margen) >= 20 else None
         return {
-            "ML_Puntos_Totales_Esperados": round(self.modelo_puntos_totales.predict(datos_scaled)[0], 1),
-            "ML_Margen_Local_Esperado": round(self.modelo_margen.predict(datos_scaled)[0], 1)
+            "ML_Puntos_Totales_Esperados": round(total, 2),
+            "ML_Margen_Local_Esperado": round(margin, 2),
+            "Sigma_Total_OOS": None if sigma_total is None else round(sigma_total, 3),
+            "Sigma_Margen_OOS": None if sigma_margin is None else round(sigma_margin, 3),
         }
