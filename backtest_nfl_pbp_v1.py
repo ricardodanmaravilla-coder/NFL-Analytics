@@ -60,42 +60,46 @@ BASE_FEATURES=[
 
 
 def pbp_subset(mode):
-    if mode == 'BASE': return []
+    if mode in {'BASE','MATCHED_BASE'}: return []
     if mode == 'EPA8':
-        metrics=['off_epa_play','off_success_rate','pass_epa','def_epa_allowed','def_success_allowed','pressure_rate']
-        windows=[8]
+        metrics=['off_epa_play','off_success_rate','pass_epa','def_epa_allowed','def_success_allowed','pressure_rate']; windows=[8]
     elif mode == 'EPA48':
-        metrics=['off_epa_play','off_success_rate','pass_epa','def_epa_allowed','def_success_allowed','pressure_rate']
-        windows=[4,8]
+        metrics=['off_epa_play','off_success_rate','pass_epa','def_epa_allowed','def_success_allowed','pressure_rate']; windows=[4,8]
     elif mode == 'CORE8':
-        metrics=['off_epa_play','off_success_rate','pass_epa','rush_epa','explosive_rate','sack_rate_allowed','def_epa_allowed','def_success_allowed','def_explosive_allowed','pressure_rate']
-        windows=[8]
+        metrics=['off_epa_play','off_success_rate','pass_epa','rush_epa','explosive_rate','sack_rate_allowed','def_epa_allowed','def_success_allowed','def_explosive_allowed','pressure_rate']; windows=[8]
     else:
-        metrics=['off_epa_play','off_success_rate','pass_epa','rush_epa','explosive_rate','sack_rate_allowed','plays','def_epa_allowed','def_success_allowed','def_explosive_allowed','pressure_rate']
-        windows=[4,8]
+        metrics=['off_epa_play','off_success_rate','pass_epa','rush_epa','explosive_rate','sack_rate_allowed','plays','def_epa_allowed','def_success_allowed','def_explosive_allowed','pressure_rate']; windows=[4,8]
     return [f'{side}_{m}_{w}' for side in ['home','away'] for m in metrics for w in windows]
 
 
 def evaluate(raw,pbp,label):
+    use_pbp_rows = label != 'BASE'
     builder=PredictorNFL_ML()
-    feat=builder.construir_features_pregame(raw,pbp if label!='BASE' else None)
+    feat=builder.construir_features_pregame(raw,pbp if use_pbp_rows else None)
     market_cols=['game_id','spread_line','total_line','home_moneyline','away_moneyline','over_odds','under_odds','home_score','away_score']
     df=feat.merge(raw[[c for c in market_cols if c in raw.columns]],on='game_id',how='left')
-    features=BASE_FEATURES + [c for c in pbp_subset(label) if c in df.columns]
-    df=df.dropna(subset=features+['puntos_totales','margen_local'])
+
+    # Híbrido final: total conserva BASE; margen usa FULL PBP.
+    total_features=BASE_FEATURES
+    margin_features=BASE_FEATURES + ([c for c in pbp_subset('FULL') if c in df.columns] if label == 'HYBRID' else [c for c in pbp_subset(label) if c in df.columns])
+    if label not in {'HYBRID'}:
+        total_features=BASE_FEATURES + [c for c in pbp_subset(label) if c in df.columns]
+
+    required=list(dict.fromkeys(total_features+margin_features+['puntos_totales','margen_local']))
+    df=df.dropna(subset=required)
     train=df[df['season']<=2024].copy(); test=df[df['season']==2025].copy()
     assert len(train)>600 and len(test)>120
 
     cal=int(len(train)*0.8)
     tm=RandomForestRegressor(n_estimators=250,max_depth=9,min_samples_leaf=6,random_state=42,n_jobs=1)
     mm=RandomForestRegressor(n_estimators=250,max_depth=9,min_samples_leaf=6,random_state=43,n_jobs=1)
-    tm.fit(train[features].iloc[:cal],train['puntos_totales'].iloc[:cal])
-    mm.fit(train[features].iloc[:cal],train['margen_local'].iloc[:cal])
-    sig_t=float(np.std(train['puntos_totales'].iloc[cal:].to_numpy()-tm.predict(train[features].iloc[cal:]),ddof=1))
-    sig_m=float(np.std(train['margen_local'].iloc[cal:].to_numpy()-mm.predict(train[features].iloc[cal:]),ddof=1))
-    tm.fit(train[features],train['puntos_totales']); mm.fit(train[features],train['margen_local'])
+    tm.fit(train[total_features].iloc[:cal],train['puntos_totales'].iloc[:cal])
+    mm.fit(train[margin_features].iloc[:cal],train['margen_local'].iloc[:cal])
+    sig_t=float(np.std(train['puntos_totales'].iloc[cal:].to_numpy()-tm.predict(train[total_features].iloc[cal:]),ddof=1))
+    sig_m=float(np.std(train['margen_local'].iloc[cal:].to_numpy()-mm.predict(train[margin_features].iloc[cal:]),ddof=1))
+    tm.fit(train[total_features],train['puntos_totales']); mm.fit(train[margin_features],train['margen_local'])
     test=test.sort_values(['week','game_id']).copy()
-    test['pred_total']=tm.predict(test[features]); test['pred_margin']=mm.predict(test[features])
+    test['pred_total']=tm.predict(test[total_features]); test['pred_margin']=mm.predict(test[margin_features])
 
     total_mae=mean_absolute_error(test['puntos_totales'],test['pred_total'])
     margin_mae=mean_absolute_error(test['margen_local'],test['pred_margin'])
@@ -134,7 +138,7 @@ def evaluate(raw,pbp,label):
 
     roi_ml=100*sum(ret_ml)/len(ret_ml) if ret_ml else 0.0
     roi_ou=100*sum(ret_ou)/len(ret_ou) if ret_ou else 0.0
-    result={'label':label,'games':len(df),'test':len(test),'features':len(features),'total_mae':total_mae,'margin_mae':margin_mae,'winner_acc':winner,'ats_acc':ats,'ou_dir_acc':ou_dir,'ml_picks':len(ret_ml),'ml_wins':wins_ml,'ml_roi':roi_ml,'ou_picks':len(ret_ou),'ou_wins':wins_ou,'ou_roi':roi_ou,'sigma_total':sig_t,'sigma_margin':sig_m}
+    result={'label':label,'games':len(df),'test':len(test),'total_features':len(total_features),'margin_features':len(margin_features),'total_mae':total_mae,'margin_mae':margin_mae,'winner_acc':winner,'ats_acc':ats,'ou_dir_acc':ou_dir,'ml_picks':len(ret_ml),'ml_wins':wins_ml,'ml_roi':roi_ml,'ou_picks':len(ret_ou),'ou_wins':wins_ou,'ou_roi':roi_ou,'sigma_total':sig_t,'sigma_margin':sig_m}
     print(result)
     return result
 
@@ -145,13 +149,15 @@ def main():
     if 'game_type' in raw.columns: raw=raw[raw['game_type'].isin(['REG','POST','WC','DIV','CON','SB'])].copy()
     pbp=pd.read_csv('data/historico_nfl_pbp_team_game.csv')
     results={}
-    for label in ['BASE','EPA8','EPA48','CORE8','FULL']:
+    for label in ['BASE','MATCHED_BASE','EPA8','EPA48','CORE8','FULL','HYBRID']:
         results[label]=evaluate(raw,pbp,label)
-    base=results['BASE']
-    for label in ['EPA8','EPA48','CORE8','FULL']:
-        r=results[label]
-        print(f"{label}_delta_total_mae={r['total_mae']-base['total_mae']:.4f} delta_margin_mae={r['margin_mae']-base['margin_mae']:.4f} delta_winner_pp={(r['winner_acc']-base['winner_acc'])*100:.2f} delta_ats_pp={(r['ats_acc']-base['ats_acc'])*100:.2f} delta_ou_pp={(r['ou_dir_acc']-base['ou_dir_acc'])*100:.2f} delta_ml_roi_pp={r['ml_roi']-base['ml_roi']:.2f} delta_ou_roi_pp={r['ou_roi']-base['ou_roi']:.2f}")
-    assert min(r['test'] for r in results.values()) >= 150
+
+    matched=results['MATCHED_BASE']; hybrid=results['HYBRID']
+    print(f"HYBRID_vs_MATCHED delta_total_mae={hybrid['total_mae']-matched['total_mae']:.4f} delta_margin_mae={hybrid['margin_mae']-matched['margin_mae']:.4f} delta_winner_pp={(hybrid['winner_acc']-matched['winner_acc'])*100:.2f} delta_ats_pp={(hybrid['ats_acc']-matched['ats_acc'])*100:.2f} delta_ou_pp={(hybrid['ou_dir_acc']-matched['ou_dir_acc'])*100:.2f} delta_ml_roi_pp={hybrid['ml_roi']-matched['ml_roi']:.2f} delta_ou_roi_pp={hybrid['ou_roi']-matched['ou_roi']:.2f}")
+    assert hybrid['test'] == matched['test'] >= 150
+    # PBP se acepta para Moneyline únicamente si mejora margen y no destruye ROI.
+    assert hybrid['margin_mae'] < matched['margin_mae']
+    assert hybrid['ml_roi'] > 0
 
 
 if __name__=='__main__':
