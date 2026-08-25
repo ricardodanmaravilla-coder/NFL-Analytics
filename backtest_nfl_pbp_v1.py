@@ -52,26 +52,43 @@ def settle(win,push,d):
     return d-1 if win else -1.0
 
 
+BASE_FEATURES=[
+    'week','home_altitude','temp','wind','is_dome','temp_missing','wind_missing','home_rest','away_rest',
+    'home_off_5','home_def_5','home_margin_5','home_total_5','home_off_17','home_def_17','home_margin_17','home_total_17','home_score_sd_17',
+    'away_off_5','away_def_5','away_margin_5','away_total_5','away_off_17','away_def_17','away_margin_17','away_total_17','away_score_sd_17'
+]
+
+
+def pbp_subset(mode):
+    if mode == 'BASE': return []
+    if mode == 'EPA8':
+        metrics=['off_epa_play','off_success_rate','pass_epa','def_epa_allowed','def_success_allowed','pressure_rate']
+        windows=[8]
+    elif mode == 'EPA48':
+        metrics=['off_epa_play','off_success_rate','pass_epa','def_epa_allowed','def_success_allowed','pressure_rate']
+        windows=[4,8]
+    elif mode == 'CORE8':
+        metrics=['off_epa_play','off_success_rate','pass_epa','rush_epa','explosive_rate','sack_rate_allowed','def_epa_allowed','def_success_allowed','def_explosive_allowed','pressure_rate']
+        windows=[8]
+    else:
+        metrics=['off_epa_play','off_success_rate','pass_epa','rush_epa','explosive_rate','sack_rate_allowed','plays','def_epa_allowed','def_success_allowed','def_explosive_allowed','pressure_rate']
+        windows=[4,8]
+    return [f'{side}_{m}_{w}' for side in ['home','away'] for m in metrics for w in windows]
+
+
 def evaluate(raw,pbp,label):
     builder=PredictorNFL_ML()
-    feat=builder.construir_features_pregame(raw,pbp)
+    feat=builder.construir_features_pregame(raw,pbp if label!='BASE' else None)
     market_cols=['game_id','spread_line','total_line','home_moneyline','away_moneyline','over_odds','under_odds','home_score','away_score']
     df=feat.merge(raw[[c for c in market_cols if c in raw.columns]],on='game_id',how='left')
-
-    base=[
-        'week','home_altitude','temp','wind','is_dome','temp_missing','wind_missing','home_rest','away_rest',
-        'home_off_5','home_def_5','home_margin_5','home_total_5','home_off_17','home_def_17','home_margin_17','home_total_17','home_score_sd_17',
-        'away_off_5','away_def_5','away_margin_5','away_total_5','away_off_17','away_def_17','away_margin_17','away_total_17','away_score_sd_17'
-    ]
-    pbp_cols=PredictorNFL_ML._pbp_feature_names()
-    features=base + ([c for c in pbp_cols if c in df.columns] if pbp is not None and not pbp.empty else [])
+    features=BASE_FEATURES + [c for c in pbp_subset(label) if c in df.columns]
     df=df.dropna(subset=features+['puntos_totales','margen_local'])
     train=df[df['season']<=2024].copy(); test=df[df['season']==2025].copy()
     assert len(train)>600 and len(test)>120
 
     cal=int(len(train)*0.8)
-    tm=RandomForestRegressor(n_estimators=300,max_depth=9,min_samples_leaf=6,random_state=42,n_jobs=1)
-    mm=RandomForestRegressor(n_estimators=300,max_depth=9,min_samples_leaf=6,random_state=43,n_jobs=1)
+    tm=RandomForestRegressor(n_estimators=250,max_depth=9,min_samples_leaf=6,random_state=42,n_jobs=1)
+    mm=RandomForestRegressor(n_estimators=250,max_depth=9,min_samples_leaf=6,random_state=43,n_jobs=1)
     tm.fit(train[features].iloc[:cal],train['puntos_totales'].iloc[:cal])
     mm.fit(train[features].iloc[:cal],train['margen_local'].iloc[:cal])
     sig_t=float(np.std(train['puntos_totales'].iloc[cal:].to_numpy()-tm.predict(train[features].iloc[cal:]),ddof=1))
@@ -117,12 +134,7 @@ def evaluate(raw,pbp,label):
 
     roi_ml=100*sum(ret_ml)/len(ret_ml) if ret_ml else 0.0
     roi_ou=100*sum(ret_ou)/len(ret_ou) if ret_ou else 0.0
-    result={
-        'label':label,'games':len(df),'test':len(test),'features':len(features),
-        'total_mae':total_mae,'margin_mae':margin_mae,'winner_acc':winner,'ats_acc':ats,'ou_dir_acc':ou_dir,
-        'ml_picks':len(ret_ml),'ml_wins':wins_ml,'ml_roi':roi_ml,'ou_picks':len(ret_ou),'ou_wins':wins_ou,'ou_roi':roi_ou,
-        'sigma_total':sig_t,'sigma_margin':sig_m,
-    }
+    result={'label':label,'games':len(df),'test':len(test),'features':len(features),'total_mae':total_mae,'margin_mae':margin_mae,'winner_acc':winner,'ats_acc':ats,'ou_dir_acc':ou_dir,'ml_picks':len(ret_ml),'ml_wins':wins_ml,'ml_roi':roi_ml,'ou_picks':len(ret_ou),'ou_wins':wins_ou,'ou_roi':roi_ou,'sigma_total':sig_t,'sigma_margin':sig_m}
     print(result)
     return result
 
@@ -132,16 +144,14 @@ def main():
     raw=raw[raw['result'].notna()].copy()
     if 'game_type' in raw.columns: raw=raw[raw['game_type'].isin(['REG','POST','WC','DIV','CON','SB'])].copy()
     pbp=pd.read_csv('data/historico_nfl_pbp_team_game.csv')
-    base=evaluate(raw,pd.DataFrame(),'BASE')
-    with_pbp=evaluate(raw,pbp,'PBP')
-    print(f"delta_total_mae={with_pbp['total_mae']-base['total_mae']:.4f}")
-    print(f"delta_margin_mae={with_pbp['margin_mae']-base['margin_mae']:.4f}")
-    print(f"delta_winner_pp={(with_pbp['winner_acc']-base['winner_acc'])*100:.2f}")
-    print(f"delta_ats_pp={(with_pbp['ats_acc']-base['ats_acc'])*100:.2f}")
-    print(f"delta_ou_pp={(with_pbp['ou_dir_acc']-base['ou_dir_acc'])*100:.2f}")
-    print(f"delta_ml_roi_pp={with_pbp['ml_roi']-base['ml_roi']:.2f}")
-    print(f"delta_ou_roi_pp={with_pbp['ou_roi']-base['ou_roi']:.2f}")
-    assert with_pbp['test'] >= 150
+    results={}
+    for label in ['BASE','EPA8','EPA48','CORE8','FULL']:
+        results[label]=evaluate(raw,pbp,label)
+    base=results['BASE']
+    for label in ['EPA8','EPA48','CORE8','FULL']:
+        r=results[label]
+        print(f"{label}_delta_total_mae={r['total_mae']-base['total_mae']:.4f} delta_margin_mae={r['margin_mae']-base['margin_mae']:.4f} delta_winner_pp={(r['winner_acc']-base['winner_acc'])*100:.2f} delta_ats_pp={(r['ats_acc']-base['ats_acc'])*100:.2f} delta_ou_pp={(r['ou_dir_acc']-base['ou_dir_acc'])*100:.2f} delta_ml_roi_pp={r['ml_roi']-base['ml_roi']:.2f} delta_ou_roi_pp={r['ou_roi']-base['ou_roi']:.2f}")
+    assert min(r['test'] for r in results.values()) >= 150
 
 
 if __name__=='__main__':
