@@ -79,10 +79,16 @@ def evaluate(raw,pbp,label):
     market_cols=['game_id','spread_line','total_line','home_moneyline','away_moneyline','over_odds','under_odds','home_score','away_score']
     df=feat.merge(raw[[c for c in market_cols if c in raw.columns]],on='game_id',how='left')
 
-    # Híbrido final: total conserva BASE; margen usa FULL PBP.
+    # Para toda variante PBP, incluida MATCHED_BASE, usamos exactamente los juegos
+    # donde ambas partes tienen rolling PBP prepartido disponible.
+    if use_pbp_rows:
+        eligibility=['home_off_epa_play_4','away_off_epa_play_4']
+        assert all(c in df.columns for c in eligibility)
+        df=df.dropna(subset=eligibility).copy()
+
     total_features=BASE_FEATURES
     margin_features=BASE_FEATURES + ([c for c in pbp_subset('FULL') if c in df.columns] if label == 'HYBRID' else [c for c in pbp_subset(label) if c in df.columns])
-    if label not in {'HYBRID'}:
+    if label != 'HYBRID':
         total_features=BASE_FEATURES + [c for c in pbp_subset(label) if c in df.columns]
 
     required=list(dict.fromkeys(total_features+margin_features+['puntos_totales','margen_local']))
@@ -155,7 +161,6 @@ def main():
     matched=results['MATCHED_BASE']; hybrid=results['HYBRID']
     print(f"HYBRID_vs_MATCHED delta_total_mae={hybrid['total_mae']-matched['total_mae']:.4f} delta_margin_mae={hybrid['margin_mae']-matched['margin_mae']:.4f} delta_winner_pp={(hybrid['winner_acc']-matched['winner_acc'])*100:.2f} delta_ats_pp={(hybrid['ats_acc']-matched['ats_acc'])*100:.2f} delta_ou_pp={(hybrid['ou_dir_acc']-matched['ou_dir_acc'])*100:.2f} delta_ml_roi_pp={hybrid['ml_roi']-matched['ml_roi']:.2f} delta_ou_roi_pp={hybrid['ou_roi']-matched['ou_roi']:.2f}")
     assert hybrid['test'] == matched['test'] >= 150
-    # PBP se acepta para Moneyline únicamente si mejora margen y no destruye ROI.
     assert hybrid['margin_mae'] < matched['margin_mae']
     assert hybrid['ml_roi'] > 0
 
