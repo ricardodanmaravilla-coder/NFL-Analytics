@@ -1,5 +1,6 @@
 import datetime as dt
 import math
+import os
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -16,7 +17,7 @@ from modules.nfl_xgb_engine import PredictorXGBoostSpread
 
 st.set_page_config(page_title="NFL Analytics Real V2", layout="wide", page_icon="🏈")
 st.title("🏈 NFL Analytics Real V2")
-st.caption("Sin cuotas inventadas. Sin líneas ficticias. Dato faltante = NO BET. Auto-bets habilitadas solo en mercados con respaldo OOS.")
+st.caption("Datos reales de mercado + play-by-play nflverse. Sin cuotas inventadas. Dato faltante = NO BET.")
 
 ESTADIOS = {
     "BUF": (42.773,-78.786,False), "MIA": (25.957,-80.238,False), "NE": (42.090,-71.264,False),
@@ -99,7 +100,11 @@ def moneyline_candidate(partido, apuesta, probs, odd_self, odd_other):
 
 @st.cache_data(ttl=3600)
 def cargar_historico():
-    return pd.read_csv("data/historico_nfl_games.csv"), pd.read_csv("data/historico_nfl_qbs.csv")
+    games=pd.read_csv("data/historico_nfl_games.csv")
+    qbs=pd.read_csv("data/historico_nfl_qbs.csv")
+    pbp_path="data/historico_nfl_pbp_team_game.csv"
+    pbp=pd.read_csv(pbp_path) if os.path.exists(pbp_path) else pd.DataFrame()
+    return games,qbs,pbp
 
 
 @st.cache_data(ttl=300)
@@ -109,8 +114,8 @@ def cargar_schedule(season):
 
 
 @st.cache_resource
-def motores(df):
-    ml=PredictorNFL_ML(); ml_ok=ml.entrenar(df)
+def motores(df,pbp):
+    ml=PredictorNFL_ML(); ml_ok=ml.entrenar(df,df_pbp_team_game=pbp)
     xgb=PredictorXGBoostSpread(); xgb_ok=xgb.entrenar(df)
     elo=MotorELONFL(); elo.actualizar_ratings(df)
     return ml,ml_ok,xgb,xgb_ok,elo
@@ -137,15 +142,16 @@ def forecast_kickoff(team,gameday,gametime):
         return None,None,False,"Forecast no disponible"
 
 
-df_games,df_qbs=cargar_historico()
-ml_engine,ml_ok,xgb_engine,xgb_ok,elo_engine=motores(df_games)
+df_games,df_qbs,df_pbp=cargar_historico()
+ml_engine,ml_ok,xgb_engine,xgb_ok,elo_engine=motores(df_games,df_pbp)
 
-with st.expander("✅ Validación fuera de muestra",expanded=True):
-    c1,c2,c3=st.columns(3)
-    c1.metric("Moneyline 2025",f"{VALIDATION['moneyline_2025_wins']}/{VALIDATION['moneyline_2025_picks']}",f"ROI +{VALIDATION['moneyline_2025_roi']}%")
-    c2.metric("Spread","NO AUTO BET",f"ML {VALIDATION['spread_ml_accuracy']}% / XGB {VALIDATION['xgb_accuracy']}%")
-    c3.metric("O/U","NO AUTO BET",f"2025 ROI {VALIDATION['ou_2025_roi']}%")
-    st.caption("Moneyline mostró señal positiva en 2025 OOS. Spread y Totales permanecen diagnósticos hasta demostrar ROI positivo en holdout real.")
+with st.expander("✅ Datos y validación",expanded=True):
+    c1,c2,c3,c4=st.columns(4)
+    c1.metric("PBP real", "ACTIVO" if (ml_ok and ml_engine.usa_pbp) else "NO DISPONIBLE", f"{len(df_pbp):,} equipo-partidos")
+    c2.metric("Moneyline 2025",f"{VALIDATION['moneyline_2025_wins']}/{VALIDATION['moneyline_2025_picks']}",f"ROI +{VALIDATION['moneyline_2025_roi']}%")
+    c3.metric("Spread","NO AUTO BET",f"ML {VALIDATION['spread_ml_accuracy']}% / XGB {VALIDATION['xgb_accuracy']}%")
+    c4.metric("O/U","NO AUTO BET",f"2025 ROI {VALIDATION['ou_2025_roi']}%")
+    st.caption("El PBP aporta EPA/play, success rate, pass/rush EPA, explosividad, presión/sacks y volumen rolling 4/8. Spread/O-U siguen bloqueados hasta que el nuevo backtest PBP pruebe ventaja real.")
 
 scan_tab,qb_tab,elo_tab=st.tabs(["🤖 Scanner","🎯 QB Props","📈 ELO"])
 
@@ -171,13 +177,11 @@ with scan_tab:
                 partido=f"{away} @ {home}"
                 hm,am=num(g.get("home_moneyline")),num(g.get("away_moneyline"))
                 line=num(g.get("total_line")); spread=num(g.get("spread_line"))
-                ho,ao=num(g.get("home_spread_odds")),num(g.get("away_spread_odds"))
-                oo,uo=num(g.get("over_odds")),num(g.get("under_odds"))
                 hr,ar=num(g.get("home_rest")),num(g.get("away_rest"))
                 temp,wind,dome,wmsg=forecast_kickoff(home,g.get("gameday"),g.get("gametime"))
                 ml=ml_engine.predecir_contexto(week,home,away,temp,wind,dome,hr,ar) if ml_ok else None
                 emp=simular_nfl_montecarlo(home,away,df_games,line,spread)
-                row={"Partido":partido,"Clima kickoff":wmsg,"ML odds H/A":f"{hm}/{am}","Spread":spread,"Total":line}
+                row={"Partido":partido,"PBP real":bool(ml and ml.get("Usa_PBP_Real")),"Clima kickoff":wmsg,"ML odds H/A":f"{hm}/{am}","Spread":spread,"Total":line}
                 if not ml or not emp.get("Disponible"):
                     row["Estado"]="Sin datos/modelos suficientes"; diag.append(row); continue
                 sigma_m=ml.get("Sigma_Margen_OOS"); sigma_t=ml.get("Sigma_Total_OOS")
@@ -189,20 +193,18 @@ with scan_tab:
                     ca=moneyline_candidate(partido,f"{away} ML",[100-pelo,100-pml_h,pe_a],am,hm)
                     if ch: picks.append(ch)
                     if ca: picks.append(ca)
-                # Spread diagnostics only
                 if spread is not None and sigma_m:
                     ml_cov=normal_gt(ml.get("ML_Margen_Local_Esperado"),spread,sigma_m)
-                    e_h,e_a=two_way(emp["Spread"].get("Cubre Local"),emp["Spread"].get("Cubre Visita"))
+                    e_h,_=two_way(emp["Spread"].get("Cubre Local"),emp["Spread"].get("Cubre Visita"))
                     xh=xgb_engine.predecir_probabilidad_cover(week,spread,line,home,away,hr,ar) if xgb_ok and line is not None else None
                     row["Spread probs ML/Emp/XGB"]=f"{None if ml_cov is None else round(ml_cov,1)} / {None if e_h is None else round(e_h,1)} / {None if xh is None else round(xh,1)}"
-                    row["Spread estado"]="NO AUTO BET — OOS insuficiente"
-                # Total diagnostics only
+                    row["Spread estado"]="NO AUTO BET — pendiente backtest PBP"
                 weather_ok=dome or (temp is not None and wind is not None)
                 if line is not None and sigma_t and weather_ok:
                     mo=normal_gt(ml.get("ML_Puntos_Totales_Esperados"),line,sigma_t)
-                    eo,eu=two_way(emp["Over_Under"].get("Prob Over"),emp["Over_Under"].get("Prob Under"))
+                    eo,_=two_way(emp["Over_Under"].get("Prob Over"),emp["Over_Under"].get("Prob Under"))
                     row["O/U probs Over ML/Emp"]=f"{None if mo is None else round(mo,1)} / {None if eo is None else round(eo,1)}"
-                    row["O/U estado"]="NO AUTO BET — ROI 2025 negativo"
+                    row["O/U estado"]="NO AUTO BET — pendiente backtest PBP"
                 row["Estado"]="Analizado"; diag.append(row)
             if picks:
                 out=pd.DataFrame(picks).sort_values("_score",ascending=False).head(top_n).drop(columns=["_score"])
@@ -211,7 +213,7 @@ with scan_tab:
             else:
                 st.info("No hay Moneyline con valor suficiente hoy.")
             if diag:
-                st.markdown("### Diagnóstico completo (Spread/O-U no generan picks)")
+                st.markdown("### Diagnóstico completo")
                 st.dataframe(pd.DataFrame(diag),use_container_width=True,hide_index=True)
 
 with qb_tab:
