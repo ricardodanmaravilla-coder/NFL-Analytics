@@ -4,22 +4,26 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 
+from modules.nfl_pbp_engine import PBP_METRICS, construir_pbp_pregame, features_pbp_actuales
+
 
 class PredictorNFL_ML:
-    """Predice total y margen usando únicamente información previa a la semana del juego."""
+    """Predice total y margen usando información real disponible antes de la semana."""
 
     def __init__(self):
         self.modelo_puntos_totales = RandomForestRegressor(
-            n_estimators=250, max_depth=9, min_samples_leaf=6,
+            n_estimators=300, max_depth=9, min_samples_leaf=6,
             random_state=42, n_jobs=1
         )
         self.modelo_margen = RandomForestRegressor(
-            n_estimators=250, max_depth=9, min_samples_leaf=6,
+            n_estimators=300, max_depth=9, min_samples_leaf=6,
             random_state=43, n_jobs=1
         )
         self.is_trained = False
         self.features_cols = []
         self.historial_actual = {}
+        self.pbp_team_game = pd.DataFrame()
+        self.usa_pbp = False
         self.residuales_total = np.array([], dtype=float)
         self.residuales_margen = np.array([], dtype=float)
         self.altitud_estadios = {
@@ -70,7 +74,7 @@ class PredictorNFL_ML:
         hist[away]["pf"].append(aws); hist[away]["pa"].append(hs)
         hist[away]["margin"].append(aws - hs); hist[away]["total"].append(total)
 
-    def construir_features_pregame(self, df_games):
+    def construir_features_pregame(self, df_games, df_pbp_team_game=None):
         df = df_games.copy()
         if "game_type" in df.columns:
             df = df[df["game_type"].isin(["REG", "POST", "WC", "DIV", "CON", "SB"])].copy()
@@ -85,8 +89,6 @@ class PredictorNFL_ML:
         grupos = df.groupby(group_cols, sort=False) if len(group_cols) == 2 else [(None, df)]
 
         for _, semana_df in grupos:
-            # Primero se construyen TODAS las features de la semana con el historial
-            # disponible al cierre de la semana anterior. Solo después se cargan resultados.
             for _, r in semana_df.iterrows():
                 home, away = r.get("home_team"), r.get("away_team")
                 if not home or not away:
@@ -118,16 +120,26 @@ class PredictorNFL_ML:
         if out.empty:
             return out
         for c in ["temp", "wind", "home_rest", "away_rest"]:
-            if c in out.columns:
-                out[c] = pd.to_numeric(out[c], errors="coerce").fillna(0.0)
+            out[c] = pd.to_numeric(out[c], errors="coerce").fillna(0.0)
+
+        if df_pbp_team_game is not None and not df_pbp_team_game.empty:
+            pbp_pre = construir_pbp_pregame(df, df_pbp_team_game)
+            if not pbp_pre.empty:
+                out = out.merge(pbp_pre, on="game_id", how="inner")
         return out
 
-    def entrenar(self, df_games, df_qbs=None):
+    @staticmethod
+    def _pbp_feature_names():
+        return [f"{side}_{metric}_{w}" for side in ["home", "away"] for metric in PBP_METRICS for w in [4, 8]]
+
+    def entrenar(self, df_games, df_qbs=None, df_pbp_team_game=None):
         try:
-            df = self.construir_features_pregame(df_games)
+            self.pbp_team_game = df_pbp_team_game.copy() if df_pbp_team_game is not None else pd.DataFrame()
+            df = self.construir_features_pregame(df_games, self.pbp_team_game)
             if len(df) < 200:
                 return False
-            self.features_cols = [
+
+            base_features = [
                 "week", "home_altitude", "temp", "wind", "is_dome", "temp_missing", "wind_missing",
                 "home_rest", "away_rest",
                 "home_off_5", "home_def_5", "home_margin_5", "home_total_5",
@@ -135,7 +147,11 @@ class PredictorNFL_ML:
                 "away_off_5", "away_def_5", "away_margin_5", "away_total_5",
                 "away_off_17", "away_def_17", "away_margin_17", "away_total_17", "away_score_sd_17",
             ]
-            df = df.dropna(subset=[c for c in self.features_cols if c not in {"temp", "wind", "home_rest", "away_rest"}])
+            pbp_features = self._pbp_feature_names()
+            self.usa_pbp = bool(pbp_features and all(c in df.columns for c in pbp_features))
+            self.features_cols = base_features + (pbp_features if self.usa_pbp else [])
+
+            df = df.dropna(subset=self.features_cols)
             X = df[self.features_cols]
             y_total, y_margin = df["puntos_totales"], df["margen_local"]
 
@@ -172,6 +188,12 @@ class PredictorNFL_ML:
         }
         row.update(self._features_equipo(self.historial_actual, home_team, "home"))
         row.update(self._features_equipo(self.historial_actual, away_team, "away"))
+        if self.usa_pbp:
+            pbp_now = features_pbp_actuales(self.pbp_team_game, home_team, away_team)
+            if pbp_now is None:
+                return None
+            row.update(pbp_now)
+
         datos = pd.DataFrame([row])[self.features_cols]
         if datos.isna().any(axis=None):
             return None
@@ -184,4 +206,5 @@ class PredictorNFL_ML:
             "ML_Margen_Local_Esperado": round(margin, 2),
             "Sigma_Total_OOS": None if sigma_total is None else round(sigma_total, 3),
             "Sigma_Margen_OOS": None if sigma_margin is None else round(sigma_margin, 3),
+            "Usa_PBP_Real": bool(self.usa_pbp),
         }
