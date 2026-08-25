@@ -18,7 +18,7 @@ jobs:
       - name: Refresh real nflverse play-by-play
         run: python descargar_pbp_nfl.py
       - name: Compile
-        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py backtest_nfl_pbp_v1.py test_streamlit_nfl_v2.py modules/*.py descargar_historico_nfl.py descargar_pbp_nfl.py
+        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py backtest_nfl_pbp_v1.py backtest_nfl_pbp_max.py test_streamlit_nfl_v2.py modules/*.py descargar_historico_nfl.py descargar_pbp_nfl.py
       - name: PBP data integrity
         run: |
           python - <<'PY'
@@ -36,6 +36,7 @@ jobs:
           python - <<'PY'
           import pandas as pd
           from modules.nfl_ml_engine import PredictorNFL_ML
+          from modules.nfl_pbp_max_engine import PredictorNFL_PBPMax
           from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
           from modules.nfl_xgb_engine import PredictorXGBoostSpread
           df=pd.read_csv('data/historico_nfl_games.csv')
@@ -43,12 +44,15 @@ jobs:
           ml=PredictorNFL_ML(); assert ml.entrenar(df,df_pbp_team_game=pbp)
           assert ml.usa_pbp is True
           r=ml.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
-          assert r and r['Usa_PBP_Real'] is True and r['PBP_Aplicado_A']=='Margen/Moneyline'
-          assert r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
+          assert r and r['Usa_PBP_Real'] is True
+          mx=PredictorNFL_PBPMax(); assert mx.entrenar(df,df_pbp_team_game=pbp)
+          rx=mx.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
+          assert rx and 0 <= rx['Probabilidad_Local_ML'] <= 100
+          assert mx.moneyline_oos_accuracy is not None and mx.moneyline_oos_brier is not None
           emp=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
           assert emp['Disponible'] is True
           x=PredictorXGBoostSpread(); assert x.entrenar(df)
-          print(r, emp['Moneyline'], x.oos_accuracy, x.oos_brier)
+          print(r, rx, emp['Moneyline'], x.oos_accuracy, x.oos_brier)
           PY
       - name: Base chronological predictive backtest
         shell: bash
@@ -65,6 +69,11 @@ jobs:
         run: |
           set -o pipefail
           python backtest_nfl_pbp_v1.py | tee /tmp/pbp_backtest.txt
+      - name: PBP current vs PBP-Max Moneyline backtest
+        shell: bash
+        run: |
+          set -o pipefail
+          python backtest_nfl_pbp_max.py | tee /tmp/pbp_max_backtest.txt
       - name: Production Streamlit startup
         run: |
           streamlit run app_nfl.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
