@@ -43,18 +43,28 @@ jobs:
           ml=PredictorNFL_ML(); assert ml.entrenar(df,df_pbp_team_game=pbp)
           assert ml.usa_pbp is True
           r=ml.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
-          assert r and r['Usa_PBP_Real'] is True and r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
+          assert r and r['Usa_PBP_Real'] is True and r['PBP_Aplicado_A']=='Margen/Moneyline'
+          assert r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
           emp=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
           assert emp['Disponible'] is True
           x=PredictorXGBoostSpread(); assert x.entrenar(df)
           print(r, emp['Moneyline'], x.oos_accuracy, x.oos_brier)
           PY
       - name: Base chronological predictive backtest
-        run: python backtest_nfl_v2.py | tee /tmp/backtest.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          python backtest_nfl_v2.py | tee /tmp/backtest.txt
       - name: Base 2025 real-odds value backtest
-        run: python backtest_nfl_value_v2.py | tee /tmp/value_backtest.txt
-      - name: Base vs PBP backtest
-        run: python backtest_nfl_pbp_v1.py | tee /tmp/pbp_backtest.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          python backtest_nfl_value_v2.py | tee /tmp/value_backtest.txt
+      - name: Base vs PBP matched/hybrid backtest
+        shell: bash
+        run: |
+          set -o pipefail
+          python backtest_nfl_pbp_v1.py | tee /tmp/pbp_backtest.txt
       - name: Production Streamlit startup
         run: |
           streamlit run app_nfl.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
