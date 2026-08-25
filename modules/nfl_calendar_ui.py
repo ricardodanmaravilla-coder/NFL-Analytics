@@ -66,9 +66,9 @@ def render_calendario_2026():
     st.dataframe(games, width="stretch", hide_index=True)
 
 
-# Safety net for Streamlit Cloud: if this module is accidentally configured
-# as the app entrypoint, render the full production app instead of showing
-# only the calendar. When imported by app_nfl.py this block does not run.
+# Safety net: if Streamlit Cloud is accidentally configured to run this helper
+# as the entrypoint, load the complete production application instead of
+# rendering a calendar-only page. The calendar helper itself remains importable
+# from the real app.
 if __name__ == "__main__":
     import app_nfl_final  # noqa: F401
-    render_calendario_2026()
