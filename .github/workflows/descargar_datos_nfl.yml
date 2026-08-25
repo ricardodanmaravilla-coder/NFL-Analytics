@@ -1,41 +1,52 @@
 name: Descargar Historico NFL
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
   schedule:
-    - cron: '0 12 * * 2' 
+    - cron: '0 12 * * 2'
 
-# 👇 ESTE ES EL PERMISO CLAVE QUE FALTABA
 permissions:
   contents: write
 
 jobs:
   actualizar-nfl:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
-        
+
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          
+          python-version: '3.11'
+
       - name: Instalar librerias
         run: |
           python -m pip install --upgrade pip
-          pip install pandas nfl_data_py fastparquet
-          
-      - name: Ejecutar Extractor NFL
+          pip install -r requirements.txt
+
+      - name: Actualizar schedule, resultados y QBs reales
         run: python descargar_historico_nfl.py
-        
-      - name: Guardar CSVs en GitHub (Commit y Push)
+
+      - name: Actualizar play-by-play real nflverse
+        run: python descargar_pbp_nfl.py
+
+      - name: Validar PBP antes de guardar
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          p=pd.read_csv('data/historico_nfl_pbp_team_game.csv')
+          assert len(p) > 1500
+          assert {'game_id','season','week','team','off_epa_play','off_success_rate','def_epa_allowed'}.issubset(p.columns)
+          print(p.groupby('season').size().to_dict())
+          PY
+
+      - name: Guardar CSVs reales en GitHub
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git pull origin main --rebase
-          git add data/historico_nfl_games.csv data/historico_nfl_qbs.csv
-          git commit -m "🏈 Automatización: Bases de datos NFL actualizadas" || echo "Sin cambios nuevos para guardar"
+          git add data/historico_nfl_games.csv data/historico_nfl_qbs.csv data/historico_nfl_pbp_team_game.csv
+          git commit -m "🏈 Automatización: datos NFL y PBP real actualizados" || echo "Sin cambios nuevos para guardar"
           git push origin main
