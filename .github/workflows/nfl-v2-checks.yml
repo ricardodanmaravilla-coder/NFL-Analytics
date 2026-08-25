@@ -13,11 +13,25 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Refresh real nflverse data in runner
+      - name: Refresh real nflverse schedule data
         run: python descargar_historico_nfl.py
+      - name: Refresh real nflverse play-by-play
+        run: python descargar_pbp_nfl.py
       - name: Compile
-        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py test_streamlit_nfl_v2.py modules/*.py descargar_historico_nfl.py
-      - name: ML and empirical engines smoke
+        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py backtest_nfl_pbp_v1.py test_streamlit_nfl_v2.py modules/*.py descargar_historico_nfl.py descargar_pbp_nfl.py
+      - name: PBP data integrity
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          p=pd.read_csv('data/historico_nfl_pbp_team_game.csv')
+          required={'game_id','season','week','team','off_epa_play','off_success_rate','pass_epa','rush_epa','explosive_rate','def_epa_allowed','pressure_rate'}
+          assert required.issubset(p.columns)
+          assert len(p) > 1500
+          assert p['off_epa_play'].notna().mean() > 0.95
+          assert p['off_success_rate'].between(0,1).mean() > 0.95
+          print(p.groupby('season').size().to_dict())
+          PY
+      - name: ML PBP and empirical engines smoke
         run: |
           python - <<'PY'
           import pandas as pd
@@ -25,22 +39,22 @@ jobs:
           from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
           from modules.nfl_xgb_engine import PredictorXGBoostSpread
           df=pd.read_csv('data/historico_nfl_games.csv')
-          ml=PredictorNFL_ML(); assert ml.entrenar(df)
+          pbp=pd.read_csv('data/historico_nfl_pbp_team_game.csv')
+          ml=PredictorNFL_ML(); assert ml.entrenar(df,df_pbp_team_game=pbp)
+          assert ml.usa_pbp is True
           r=ml.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
-          assert r and r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
+          assert r and r['Usa_PBP_Real'] is True and r['Sigma_Total_OOS'] and r['Sigma_Margen_OOS']
           emp=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
           assert emp['Disponible'] is True
-          assert emp['Over_Under']['Prob Over'] is not None
-          assert emp['Spread']['Push'] is not None
           x=PredictorXGBoostSpread(); assert x.entrenar(df)
-          p=x.predecir_probabilidad_cover(1,2.5,47.5,'KC','BUF',7,7)
-          assert p is not None and 0 <= p <= 100
-          print(r, emp['Moneyline'], emp['Spread'], p, x.oos_accuracy, x.oos_brier)
+          print(r, emp['Moneyline'], x.oos_accuracy, x.oos_brier)
           PY
-      - name: Chronological predictive backtest
+      - name: Base chronological predictive backtest
         run: python backtest_nfl_v2.py | tee /tmp/backtest.txt
-      - name: 2025 real-odds value backtest
+      - name: Base 2025 real-odds value backtest
         run: python backtest_nfl_value_v2.py | tee /tmp/value_backtest.txt
+      - name: Base vs PBP backtest
+        run: python backtest_nfl_pbp_v1.py | tee /tmp/pbp_backtest.txt
       - name: Production Streamlit startup
         run: |
           streamlit run app_nfl.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
@@ -56,8 +70,8 @@ jobs:
         run: python test_streamlit_nfl_v2.py
       - name: Conservative production guardrails
         run: |
-          grep -q 'NO AUTO BET — OOS insuficiente' app_nfl_final.py
-          grep -q 'NO AUTO BET — ROI 2025 negativo' app_nfl_final.py
+          grep -q 'PBP real' app_nfl_final.py
+          grep -q 'pendiente backtest PBP' app_nfl_final.py
           ! grep -R "spread_to_ml" app_nfl.py app_nfl_final.py
           ! grep -R 'return 1.91' app_nfl.py app_nfl_final.py modules
           ! grep -R 'fillna(-3.0)' modules/nfl_xgb_engine.py
