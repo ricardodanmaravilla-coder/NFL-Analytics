@@ -1,0 +1,28 @@
+name: NFL UI entrypoint guard
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-ui-entrypoint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python test_calendar_entrypoint_guard.py
+      - run: python -m py_compile app_nfl.py app_nfl_final.py modules/nfl_calendar_ui.py
+      - name: Streamlit startup
+        run: |
+          streamlit run app_nfl.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
+          PID=$!
+          READY=0
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:8501/_stcore/health; then READY=1; break; fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then cat /tmp/streamlit.log; kill $PID || true; exit 1; fi
+          kill $PID || true
