@@ -18,7 +18,9 @@ jobs:
       - name: Refresh real nflverse play-by-play
         run: python descargar_pbp_nfl.py
       - name: Compile
-        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py backtest_nfl_pbp_v1.py test_streamlit_nfl_v2.py modules/*.py descargar_historico_nfl.py descargar_pbp_nfl.py
+        run: python -m py_compile app_nfl.py app_nfl_final.py backtest_nfl_v2.py backtest_nfl_value_v2.py backtest_nfl_pbp_v1.py test_streamlit_nfl_v2.py test_calendar_2026.py modules/*.py descargar_historico_nfl.py descargar_pbp_nfl.py
+      - name: 2026 regular-season calendar integrity
+        run: python test_calendar_2026.py
       - name: PBP data integrity
         run: |
           python - <<'PY'
