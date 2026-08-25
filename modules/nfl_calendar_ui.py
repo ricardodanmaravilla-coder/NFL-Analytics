@@ -64,3 +64,11 @@ def render_calendario_2026():
 
     st.caption(f"Fuente: nflverse schedule real · Week {week} · {len(games)} partidos")
     st.dataframe(games, width="stretch", hide_index=True)
+
+
+# Safety net for Streamlit Cloud: if this module is accidentally configured
+# as the app entrypoint, render the full production app instead of showing
+# only the calendar. When imported by app_nfl.py this block does not run.
+if __name__ == "__main__":
+    import app_nfl_final  # noqa: F401
+    render_calendario_2026()
