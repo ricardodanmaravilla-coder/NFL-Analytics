@@ -146,7 +146,7 @@ def evaluate_season(raw, pbp, target_season):
             bet_rows.append({
                 "season": target_season, "week": week, "game_id": r.get("game_id"),
                 "side": side, "win": int(win), "return": settle(win, pick["decimal"]),
-                "p": pick["p"], "edge": pick["edge"], "ev": pick["ev"],
+                "p": pick["p"], "decimal": pick["decimal"], "edge": pick["edge"], "ev": pick["ev"],
             })
 
     probs = pd.DataFrame(probability_rows)
