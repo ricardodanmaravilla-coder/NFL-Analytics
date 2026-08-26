@@ -11,6 +11,7 @@ import nfl_data_py as nfl
 from modules.nfl_calibration import (
     calibration_diagnostics,
     empirical_residual_gt,
+    empirical_residual_two_way,
     historico_antes,
     primary_with_agreement,
 )
@@ -38,8 +39,6 @@ ESTADIOS = {
     "LAR": (33.953,-118.339,True), "SF": (37.403,-121.969,False), "SEA": (47.595,-122.331,False),
 }
 
-# Resultados heredados del backtest anterior. Se muestran como referencia, no como
-# garantía futura. El nuevo protocolo walk-forward vive en backtest_nfl_walkforward.py.
 VALIDATION = {
     "moneyline_2025_picks": 39, "moneyline_2025_wins": 25, "moneyline_2025_roi": 4.03,
     "spread_ml_accuracy": 53.14, "xgb_accuracy": 51.13, "ou_2025_roi": -3.19,
@@ -66,18 +65,14 @@ def no_vig(a, b):
         return None, None
     ia, ib = 1 / da, 1 / db
     s = ia + ib
-    if s <= 0:
-        return None, None
-    return ia / s, ib / s
+    return (ia / s, ib / s) if s > 0 else (None, None)
 
 
 def two_way(a, b):
     if a is None or b is None:
         return None, None
     s = float(a) + float(b)
-    if s <= 0:
-        return None, None
-    return 100 * float(a) / s, 100 * float(b) / s
+    return (100 * float(a) / s, 100 * float(b) / s) if s > 0 else (None, None)
 
 
 def value_metrics(pct, odd, mkt):
@@ -95,10 +90,7 @@ def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self,
     disagreement = max(probs) - min(probs)
     mkt, _ = no_vig(odd_self, odd_other)
     vm = value_metrics(p, odd_self, mkt)
-    if vm is None:
-        return None
-    # Umbrales deliberadamente conservadores; el edge se calcula contra mercado no-vig.
-    if p < 54.0 or vm["edge"] < 3.0 or vm["ev"] < 3.0:
+    if vm is None or p < 54.0 or vm["edge"] < 3.0 or vm["ev"] < 3.0:
         return None
     return {
         "Partido": partido, "Mercado": "Moneyline", "Apuesta": apuesta,
@@ -181,7 +173,6 @@ def forecast_kickoff(team, gameday, gametime, roof=None):
 
 
 df_games, df_qbs, df_pbp = cargar_historico()
-# Motores globales solo para ranking/estado actual. Los picks usan motores con cutoff.
 ml_global, ml_global_ok, xgb_global, xgb_global_ok, elo_global = motores(df_games, df_pbp)
 
 with st.expander("✅ Datos y validación", expanded=True):
@@ -216,11 +207,9 @@ with scan_tab:
                 if not future.empty:
                     games = future
 
-            # CORTE TEMPORAL ESTRICTO: estos son los únicos datos visibles a los motores.
             past_games = historico_antes(df_games, season, week)
             past_pbp = historico_antes(df_pbp, season, week) if not df_pbp.empty else pd.DataFrame()
             ml_engine, ml_ok, xgb_engine, xgb_ok, elo_engine = motores(past_games, past_pbp)
-
             picks, diag = [], []
             if not ml_ok:
                 st.warning("No hay histórico prepartido suficiente para entrenar el modelo en este corte temporal.")
@@ -235,11 +224,8 @@ with scan_tab:
                 hr, ar = num(g.get("home_rest")), num(g.get("away_rest"))
                 roof = g.get("roof")
                 neutral = str(g.get("location", "")).strip().lower() == "neutral"
-
-                # En neutral site no usamos coordenadas/altura del equipo local: sería contexto falso.
                 if neutral:
-                    row = {"Partido": partido, "Estado": "NO BET — sede neutral requiere estadio/contexto verificado", "Spread": spread, "Total": line}
-                    diag.append(row)
+                    diag.append({"Partido": partido, "Estado": "NO BET — sede neutral requiere estadio/contexto verificado", "Spread": spread, "Total": line})
                     continue
 
                 temp, wind, dome, wmsg = forecast_kickoff(home, g.get("gameday"), g.get("gametime"), roof)
@@ -255,7 +241,7 @@ with scan_tab:
                     diag.append(row)
                     continue
 
-                pml_h = empirical_residual_gt(
+                pml_h, pml_a = empirical_residual_two_way(
                     ml.get("ML_Margen_Local_Esperado"), 0.0, ml_engine.residuales_margen
                 )
                 pe_h, pe_a = two_way(emp["Moneyline"].get("Gana Local"), emp["Moneyline"].get("Gana Visita"))
@@ -263,19 +249,16 @@ with scan_tab:
                     elo_engine.ratings.get(home, 1500), elo_engine.ratings.get(away, 1500)
                 )
 
-                if hm is not None and am is not None and pml_h is not None and pe_h is not None and pe_a is not None:
+                if hm is not None and am is not None and pml_h is not None and pml_a is not None and pe_h is not None and pe_a is not None:
                     ch = moneyline_candidate(partido, f"{home} ML", pml_h, [pelo, pe_h], hm, am)
-                    ca = moneyline_candidate(partido, f"{away} ML", 100 - pml_h, [100 - pelo, pe_a], am, hm)
+                    ca = moneyline_candidate(partido, f"{away} ML", pml_a, [100 - pelo, pe_a], am, hm)
                     if ch:
                         picks.append(ch)
                     if ca:
                         picks.append(ca)
 
-                # Diagnóstico solamente: estas categorías continúan NO AUTO BET.
                 if spread is not None:
-                    ml_cov = empirical_residual_gt(
-                        ml.get("ML_Margen_Local_Esperado"), spread, ml_engine.residuales_margen
-                    )
+                    ml_cov = empirical_residual_gt(ml.get("ML_Margen_Local_Esperado"), spread, ml_engine.residuales_margen)
                     e_h, _ = two_way(emp["Spread"].get("Cubre Local"), emp["Spread"].get("Cubre Visita"))
                     xh = xgb_engine.predecir_probabilidad_cover(week, spread, line, home, away, hr, ar) if xgb_ok and line is not None else None
                     row["Spread probs Cal/Emp/XGB"] = f"{None if ml_cov is None else round(ml_cov,1)} / {None if e_h is None else round(e_h,1)} / {None if xh is None else round(xh,1)}"
@@ -283,14 +266,12 @@ with scan_tab:
 
                 weather_ok = dome or (temp is not None and wind is not None)
                 if line is not None and weather_ok:
-                    mo = empirical_residual_gt(
-                        ml.get("ML_Puntos_Totales_Esperados"), line, ml_engine.residuales_total
-                    )
+                    mo = empirical_residual_gt(ml.get("ML_Puntos_Totales_Esperados"), line, ml_engine.residuales_total)
                     eo, _ = two_way(emp["Over_Under"].get("Prob Over"), emp["Over_Under"].get("Prob Under"))
                     row["O/U probs Cal/Emp"] = f"{None if mo is None else round(mo,1)} / {None if eo is None else round(eo,1)}"
                     row["O/U estado"] = "NO AUTO BET — requiere edge walk-forward"
 
-                row["ML prob calibrada H"] = pml_h
+                row["ML prob calibrada H/A"] = f"{pml_h}/{pml_a}"
                 row["Elo H"] = round(pelo, 1)
                 row["Empírico H"] = None if pe_h is None else round(pe_h, 1)
                 row["Estado"] = "Analizado sin look-ahead"
