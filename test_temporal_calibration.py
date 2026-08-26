@@ -30,9 +30,18 @@ def test_empirical_calibration_refuses_small_sample():
 
 
 def test_support_models_are_guardrails_not_averaged():
-    # La probabilidad final debe seguir siendo la primaria calibrada.
     assert primary_with_agreement(58.0, [55.0, 60.0]) == 58.0
-    # Dirección opuesta => NO BET.
     assert primary_with_agreement(58.0, [49.0, 60.0]) is None
-    # Desacuerdo extremo => NO BET.
     assert primary_with_agreement(58.0, [43.0, 60.0]) is None
+
+
+def main():
+    test_historico_antes_excludes_target_week_and_future()
+    test_empirical_calibration_is_monotonic_in_prediction()
+    test_empirical_calibration_refuses_small_sample()
+    test_support_models_are_guardrails_not_averaged()
+    print("temporal/calibration regression tests: OK")
+
+
+if __name__ == "__main__":
+    main()
