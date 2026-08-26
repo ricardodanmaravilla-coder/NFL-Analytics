@@ -71,6 +71,11 @@ jobs:
         run: |
           set -o pipefail
           python backtest_nfl_pbp_v1.py | tee /tmp/pbp_backtest.txt
+      - name: Strict weekly walk-forward calibration and value backtest
+        shell: bash
+        run: |
+          set -o pipefail
+          python backtest_nfl_walkforward.py | tee /tmp/walkforward_backtest.txt
       - name: Production Streamlit startup
         run: |
           streamlit run app_nfl.py --server.headless true --server.port 8501 > /tmp/streamlit.log 2>&1 &
