@@ -41,6 +41,7 @@ ESTADIOS = {
 
 VALIDATION = {
     "moneyline_2025_picks": 39, "moneyline_2025_wins": 25, "moneyline_2025_roi": 4.03,
+    "favorite_wf_picks": 87, "favorite_wf_wins": 63, "favorite_wf_roi": 13.07,
     "spread_ml_accuracy": 53.14, "xgb_accuracy": 51.13, "ou_2025_roi": -3.19,
 }
 
@@ -90,15 +91,19 @@ def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self,
     disagreement = max(probs) - min(probs)
     mkt, _ = no_vig(odd_self, odd_other)
     vm = value_metrics(p, odd_self, mkt)
-    if vm is None or p < 54.0 or vm["edge"] < 3.0 or vm["ev"] < 3.0:
+    odd = num(odd_self)
+    if vm is None or odd is None or p < 54.0 or vm["edge"] < 3.0 or vm["ev"] < 3.0:
         return None
+    is_favorite = odd < 0
     return {
+        "Acción": "BET" if is_favorite else "LEAN — NO AUTO BET",
         "Partido": partido, "Mercado": "Moneyline", "Apuesta": apuesta,
         "Prob calibrada": round(p, 1),
         "Soporte Elo/Emp": f"{support_probs[0]:.1f}% / {support_probs[1]:.1f}%",
         "Desacuerdo pp": round(disagreement, 1),
-        "Momio real": int(float(odd_self)), "Edge no-vig pp": round(vm["edge"], 2),
+        "Momio real": int(odd), "Edge no-vig pp": round(vm["edge"], 2),
         "EV %": round(vm["ev"], 2),
+        "_favorite": is_favorite,
         "_score": 1.5 * vm["edge"] + vm["ev"] - 0.3 * disagreement,
     }
 
@@ -178,13 +183,13 @@ ml_global, ml_global_ok, xgb_global, xgb_global_ok, elo_global = motores(df_game
 with st.expander("✅ Datos y validación", expanded=True):
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("PBP real", "ACTIVO" if (ml_global_ok and ml_global.usa_pbp) else "NO DISPONIBLE", f"{len(df_pbp):,} equipo-partidos")
-    c2.metric("ML referencia 2025", f"{VALIDATION['moneyline_2025_wins']}/{VALIDATION['moneyline_2025_picks']}", f"ROI previo +{VALIDATION['moneyline_2025_roi']}%")
+    c2.metric("ML favoritos WF", f"{VALIDATION['favorite_wf_wins']}/{VALIDATION['favorite_wf_picks']}", f"ROI agregado +{VALIDATION['favorite_wf_roi']}%")
     c3.metric("Spread", "NO AUTO BET", f"ML {VALIDATION['spread_ml_accuracy']}% / XGB {VALIDATION['xgb_accuracy']}%")
     c4.metric("O/U", "NO AUTO BET", f"ROI previo {VALIDATION['ou_2025_roi']}%")
     if ml_global_ok:
         d = calibration_diagnostics(ml_global.residuales_margen)
         st.caption(f"Calibración margen OOS: n={d['n']} · bias={d['bias']} · MAE residual={d['mae']}. Probabilidades usan residuales OOS empíricos, no Normal fija.")
-    st.caption("Cada jornada se reconstruye exclusivamente con datos anteriores a esa semana. Spread/O-U permanecen bloqueados hasta demostrar ventaja walk-forward.")
+    st.caption("Filtro Moneyline validado: sólo favoritos que pasan probabilidad + acuerdo + no-vig + EV se marcan BET. Underdogs quedan como LEAN / NO AUTO BET. Spread/O-U permanecen bloqueados.")
 
 scan_tab, qb_tab, elo_tab = st.tabs(["🤖 Scanner", "🎯 QB Props", "📈 ELO"])
 
@@ -192,7 +197,7 @@ with scan_tab:
     a, b, c = st.columns(3)
     season = a.number_input("Temporada", 2021, 2030, 2026, 1)
     week = b.number_input("Semana", 1, 22, 1, 1)
-    top_n = c.slider("Máximo de picks Moneyline", 1, 10, 3)
+    top_n = c.slider("Máximo de BET Moneyline", 1, 10, 3)
 
     if st.button("Analizar jornada", type="primary"):
         sched = cargar_schedule(season)
@@ -278,14 +283,23 @@ with scan_tab:
                 diag.append(row)
 
             if picks:
-                out = pd.DataFrame(picks).sort_values("_score", ascending=False).head(top_n).drop(columns=["_score"])
-                st.success(f"{len(out)} Moneyline picks superan calibración OOS + acuerdo de modelos + no-vig + EV.")
-                st.dataframe(out, use_container_width=True, hide_index=True)
+                all_candidates = pd.DataFrame(picks).sort_values("_score", ascending=False)
+                bets = all_candidates[all_candidates["_favorite"]].head(top_n).drop(columns=["_favorite", "_score"])
+                leans = all_candidates[~all_candidates["_favorite"]].drop(columns=["_favorite", "_score"])
+                if not bets.empty:
+                    st.success(f"{len(bets)} BET Moneyline pasan filtros OOS y filtro estable de favoritos.")
+                    st.dataframe(bets, width="stretch", hide_index=True)
+                else:
+                    st.info("No hay favoritos Moneyline con valor suficientemente robusto para BET en este corte temporal.")
+                if not leans.empty:
+                    st.markdown("### LEAN — underdogs con señal, no auto bet")
+                    st.caption("Se muestran para diagnóstico; el walk-forward 2023–2025 no respaldó underdogs como filtro automático estable.")
+                    st.dataframe(leans, width="stretch", hide_index=True)
             else:
                 st.info("No hay Moneyline con valor suficientemente robusto en este corte temporal.")
             if diag:
                 st.markdown("### Diagnóstico completo")
-                st.dataframe(pd.DataFrame(diag), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(diag), width="stretch", hide_index=True)
 
 with qb_tab:
     st.info("QB props permanecen manuales y descriptivos; no se presentan como probabilidad calibrada de apuesta.")
@@ -307,4 +321,4 @@ with qb_tab:
 with elo_tab:
     rank = pd.DataFrame(elo_global.obtener_power_ranking(), columns=["Equipo", "ELO"])
     rank["ELO"] = rank["ELO"].round(1)
-    st.dataframe(rank, use_container_width=True, hide_index=True)
+    st.dataframe(rank, width="stretch", hide_index=True)
