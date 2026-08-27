@@ -15,12 +15,12 @@ import nfl_data_py as nfl
 
 from modules.nfl_calibration import empirical_residual_two_way, historico_antes, primary_with_agreement
 from modules.nfl_elo_engine import MotorELONFL
-from modules.nfl_ml_engine import PredictorNFL_ML
+from modules.nfl_moneyline_runtime import MoneylineRuntime
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 
 st.set_page_config(page_title="NFL Analytics Real V2", layout="wide", page_icon="🏈")
 st.title("🏈 NFL Analytics Real V2")
-st.caption("Scanner estable: la pantalla no reentrena ni recalcula al cambiar controles. El análisis corre únicamente al pulsar el botón.")
+st.caption("Scanner estable: sólo calcula al pulsar Analizar jornada. El runtime de producción entrena únicamente Moneyline/margen para evitar picos de memoria.")
 
 ESTADIOS = {
     "BUF": (42.773,-78.786,False), "MIA": (25.957,-80.238,False), "NE": (42.090,-71.264,False),
@@ -116,7 +116,7 @@ def cargar_schedule(season):
 
 @st.cache_resource(show_spinner=False)
 def motor_ml(df, pbp):
-    ml = PredictorNFL_ML()
+    ml = MoneylineRuntime()
     return ml, ml.entrenar(df, df_pbp_team_game=pbp)
 
 
@@ -216,70 +216,84 @@ with st.form("scanner_form", clear_on_submit=False):
     submitted = st.form_submit_button("🔎 Analizar jornada", type="primary", use_container_width=True)
 
 if submitted:
-    sched = cargar_schedule(season)
-    if sched.empty:
-        guardar(pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Temporada {season} · Semana {week}")
-        st.error("No se pudo obtener el calendario real.")
-    else:
-        games = sched[sched["week"] == int(week)].copy()
-        if "game_type" in games.columns:
-            games = games[games["game_type"].isin(["REG", "POST", "WC", "DIV", "CON", "SB"])]
-        if "home_score" in games.columns:
-            future = games[games["home_score"].isna()]
-            if not future.empty:
-                games = future
-
-        past_games = historico_antes(df_games, season, week)
-        past_pbp = historico_antes(df_pbp, season, week) if not df_pbp.empty else pd.DataFrame()
-
-        with st.spinner("Analizando la jornada..."):
-            ml_engine, ml_ok = motor_ml(past_games, past_pbp)
-            elo_engine = motor_elo(past_games)
-            picks, diag = [], []
-            for _, g in games.iterrows():
-                home, away = g.get("home_team"), g.get("away_team")
-                if not home or not away:
-                    continue
-                partido = f"{away} @ {home}"
-                hm, am = num(g.get("home_moneyline")), num(g.get("away_moneyline"))
-                if hm is None or am is None:
-                    diag.append({"Partido": partido, "Estado": "Sin momios Moneyline"})
-                    continue
-                if str(g.get("location", "")).strip().lower() == "neutral":
-                    diag.append({"Partido": partido, "Estado": "NO BET — sede neutral"})
-                    continue
-                hr, ar = num(g.get("home_rest")), num(g.get("away_rest"))
-                temp, wind, dome, wmsg = forecast_kickoff(home, g.get("gameday"), g.get("gametime"), g.get("roof"))
-                ml = ml_engine.predecir_contexto(week, home, away, temp, wind, dome, hr, ar) if ml_ok else None
-                emp = simular_nfl_montecarlo(home, away, past_games, num(g.get("total_line")), num(g.get("spread_line")))
-                if not ml or not emp.get("Disponible"):
-                    diag.append({"Partido": partido, "Estado": "Sin datos suficientes", "Clima": wmsg})
-                    continue
-                p_h, p_a = empirical_residual_two_way(ml.get("ML_Margen_Local_Esperado"), 0.0, ml_engine.residuales_margen)
-                e_h, e_a = two_way(emp["Moneyline"].get("Gana Local"), emp["Moneyline"].get("Gana Visita"))
-                elo_h = 100 * elo_engine.calcular_probabilidad_elo(elo_engine.ratings.get(home, 1500), elo_engine.ratings.get(away, 1500))
-                ch = moneyline_candidate(partido, f"{home} ML", p_h, [elo_h, e_h], hm, am)
-                ca = moneyline_candidate(partido, f"{away} ML", p_a, [100 - elo_h, e_a], am, hm)
-                if ch:
-                    picks.append(ch)
-                if ca:
-                    picks.append(ca)
-                diag.append({"Partido": partido, "Prob H/A": f"{p_h}/{p_a}", "Clima": wmsg, "Estado": "Analizado"})
-
-        if picks:
-            candidates = pd.DataFrame(picks).sort_values("_score", ascending=False)
-            bets = candidates[candidates["_favorite"]].drop(columns=["_favorite", "_score"])
-            leans = candidates[~candidates["_favorite"]].drop(columns=["_favorite", "_score"])
+    label = f"Temporada {int(season)} · Semana {int(week)}"
+    try:
+        sched = cargar_schedule(season)
+        if sched.empty:
+            guardar(pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), label)
+            st.error("No se pudo obtener el calendario real.")
         else:
-            bets, leans = pd.DataFrame(), pd.DataFrame()
-        guardar(bets, leans, pd.DataFrame(diag), f"Temporada {int(season)} · Semana {int(week)}")
+            games = sched[sched["week"] == int(week)].copy()
+            if "game_type" in games.columns:
+                games = games[games["game_type"].isin(["REG", "POST", "WC", "DIV", "CON", "SB"])]
+            if "home_score" in games.columns:
+                future = games[games["home_score"].isna()]
+                if not future.empty:
+                    games = future
+
+            past_games = historico_antes(df_games, season, week)
+            past_pbp = historico_antes(df_pbp, season, week) if not df_pbp.empty else pd.DataFrame()
+
+            with st.spinner("Entrenando Moneyline y analizando la jornada..."):
+                ml_engine, ml_ok = motor_ml(past_games, past_pbp)
+                elo_engine = motor_elo(past_games)
+                if not ml_ok:
+                    raise RuntimeError("No hubo histórico suficiente para entrenar Moneyline en este corte temporal.")
+
+                picks, diag = [], []
+                for _, g in games.iterrows():
+                    home, away = g.get("home_team"), g.get("away_team")
+                    if not home or not away:
+                        continue
+                    partido = f"{away} @ {home}"
+                    try:
+                        hm, am = num(g.get("home_moneyline")), num(g.get("away_moneyline"))
+                        if hm is None or am is None:
+                            diag.append({"Partido": partido, "Estado": "Sin momios Moneyline"})
+                            continue
+                        if str(g.get("location", "")).strip().lower() == "neutral":
+                            diag.append({"Partido": partido, "Estado": "NO BET — sede neutral"})
+                            continue
+                        hr, ar = num(g.get("home_rest")), num(g.get("away_rest"))
+                        temp, wind, dome, wmsg = forecast_kickoff(home, g.get("gameday"), g.get("gametime"), g.get("roof"))
+                        ml = ml_engine.predecir_contexto(week, home, away, temp, wind, dome, hr, ar)
+                        emp = simular_nfl_montecarlo(home, away, past_games, num(g.get("total_line")), num(g.get("spread_line")))
+                        if not ml or not emp.get("Disponible"):
+                            diag.append({"Partido": partido, "Estado": "Sin datos suficientes", "Clima": wmsg})
+                            continue
+                        p_h, p_a = empirical_residual_two_way(ml.get("ML_Margen_Local_Esperado"), 0.0, ml_engine.residuales_margen)
+                        e_h, e_a = two_way(emp["Moneyline"].get("Gana Local"), emp["Moneyline"].get("Gana Visita"))
+                        elo_h = 100 * elo_engine.calcular_probabilidad_elo(elo_engine.ratings.get(home, 1500), elo_engine.ratings.get(away, 1500))
+                        ch = moneyline_candidate(partido, f"{home} ML", p_h, [elo_h, e_h], hm, am)
+                        ca = moneyline_candidate(partido, f"{away} ML", p_a, [100 - elo_h, e_a], am, hm)
+                        if ch:
+                            picks.append(ch)
+                        if ca:
+                            picks.append(ca)
+                        diag.append({"Partido": partido, "Prob H/A": f"{p_h}/{p_a}", "Clima": wmsg, "Estado": "Analizado"})
+                    except Exception as game_error:
+                        diag.append({"Partido": partido, "Estado": f"Error aislado: {type(game_error).__name__}"})
+
+            if picks:
+                candidates = pd.DataFrame(picks).sort_values("_score", ascending=False)
+                bets = candidates[candidates["_favorite"]].drop(columns=["_favorite", "_score"])
+                leans = candidates[~candidates["_favorite"]].drop(columns=["_favorite", "_score"])
+            else:
+                bets, leans = pd.DataFrame(), pd.DataFrame()
+            guardar(bets, leans, pd.DataFrame(diag), label)
+    except MemoryError:
+        guardar(pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), label)
+        st.error("El servidor agotó memoria durante el análisis. El proceso fue detenido de forma segura.")
+    except Exception as exc:
+        guardar(pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), label)
+        st.error(f"El análisis no pudo completarse: {type(exc).__name__}: {exc}")
 
 render()
 
 with st.expander("Estado del sistema"):
     st.write({
         "PBP": "ACTIVO" if not df_pbp.empty else "NO DISPONIBLE",
-        "Moneyline": "BET automático sólo en favoritos validados",
+        "Moneyline": "runtime ligero; BET automático sólo en favoritos validados",
         "Spread": "NO AUTO BET",
         "Over/Under": "NO AUTO BET",
     })
