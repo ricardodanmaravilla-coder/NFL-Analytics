@@ -5,3 +5,5 @@ requests
 nfl_data_py
 scikit-learn
 xgboost
+pyarrow
+duckdb

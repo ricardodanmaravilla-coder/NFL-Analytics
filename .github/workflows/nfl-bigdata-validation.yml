@@ -1,0 +1,33 @@
+name: NFL Big Data Validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Compile
+        run: python -m compileall modules migrar_pbp_bigdata.py
+      - name: Build nflverse development lake 2021-2025
+        run: python migrar_pbp_bigdata.py --download --start 2021 --end 2025
+      - name: DuckDB selective read smoke test
+        run: |
+          python - <<'PY'
+          from modules.nfl_bigdata_store import leer_pbp_parquet
+          df = leer_pbp_parquet(seasons=[2024, 2025])
+          assert not df.empty
+          assert set(df['season'].astype(int).unique()).issubset({2024, 2025})
+          print(df.shape)
+          PY
+      - name: Existing PBP backtest smoke test
+        run: python backtest_nfl_pbp_v1.py
