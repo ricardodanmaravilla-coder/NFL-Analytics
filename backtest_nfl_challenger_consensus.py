@@ -47,7 +47,14 @@ def build_predictions(raw, pbp):
         "game_id", "season", "week", "home_team", "away_team", "spread_line",
         "home_moneyline", "away_moneyline", "home_score", "away_score",
     ]
-    df = feat.merge(raw[[c for c in market_cols if c in raw.columns]], on="game_id", how="left")
+    # Preserve canonical pregame columns already present in feat. Re-merging season/week
+    # (or team names) creates _x/_y suffixes and removes the canonical `week` column.
+    # Only attach market/result fields that are genuinely missing.
+    attach_cols = ["game_id"] + [
+        c for c in market_cols
+        if c != "game_id" and c in raw.columns and c not in feat.columns
+    ]
+    df = feat.merge(raw[attach_cols], on="game_id", how="left")
     df = df.dropna(subset=["home_off_epa_play_4", "away_off_epa_play_4"]).copy()
 
     hybrid_features = bt.BASE_FEATURES + [c for c in bt.pbp_subset("FULL") if c in df.columns]
@@ -208,8 +215,6 @@ def main():
         print("\nSEGMENTS")
         print(pd.DataFrame(detail).sort_values(["segment", "roi"], ascending=[True, False]).to_string(index=False))
 
-    # A consensus filter is only a candidate if it keeps a useful sample and improves
-    # both ROI and drawdown without a material win-rate regression.
     candidate = (
         agree["picks"] >= 15
         and agree["roi"] > base["roi"]
