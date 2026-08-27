@@ -9,7 +9,6 @@ import streamlit as st
 import nfl_data_py as nfl
 
 from modules.nfl_calibration import (
-    calibration_diagnostics,
     empirical_residual_gt,
     empirical_residual_two_way,
     historico_antes,
@@ -136,6 +135,13 @@ def motores(df, pbp):
     return ml, ml_ok, xgb, xgb_ok, elo
 
 
+@st.cache_resource
+def motor_elo_global(df):
+    elo = MotorELONFL()
+    elo.actualizar_ratings(df)
+    return elo
+
+
 def roof_is_dome(roof, fallback=False):
     text = str(roof or "").strip().lower()
     if text in {"dome", "closed", "indoors", "indoor"}:
@@ -178,18 +184,15 @@ def forecast_kickoff(team, gameday, gametime, roof=None):
 
 
 df_games, df_qbs, df_pbp = cargar_historico()
-ml_global, ml_global_ok, xgb_global, xgb_global_ok, elo_global = motores(df_games, df_pbp)
+elo_global = motor_elo_global(df_games)
 
 with st.expander("✅ Datos y validación", expanded=True):
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("PBP real", "ACTIVO" if (ml_global_ok and ml_global.usa_pbp) else "NO DISPONIBLE", f"{len(df_pbp):,} equipo-partidos")
+    c1.metric("PBP real", "ACTIVO" if not df_pbp.empty else "NO DISPONIBLE", f"{len(df_pbp):,} equipo-partidos")
     c2.metric("ML favoritos WF", f"{VALIDATION['favorite_wf_wins']}/{VALIDATION['favorite_wf_picks']}", f"ROI agregado +{VALIDATION['favorite_wf_roi']}%")
     c3.metric("Spread", "NO AUTO BET", f"ML {VALIDATION['spread_ml_accuracy']}% / XGB {VALIDATION['xgb_accuracy']}%")
     c4.metric("O/U", "NO AUTO BET", f"ROI previo {VALIDATION['ou_2025_roi']}%")
-    if ml_global_ok:
-        d = calibration_diagnostics(ml_global.residuales_margen)
-        st.caption(f"Calibración margen OOS: n={d['n']} · bias={d['bias']} · MAE residual={d['mae']}. Probabilidades usan residuales OOS empíricos, no Normal fija.")
-    st.caption("Filtro Moneyline validado: sólo favoritos que pasan probabilidad + acuerdo + no-vig + EV se marcan BET. Underdogs quedan como LEAN / NO AUTO BET. Spread/O-U permanecen bloqueados.")
+    st.caption("Arranque ligero: ML/XGBoost sólo se entrenan al pulsar Analizar jornada. Filtro Moneyline: favoritos que pasan probabilidad + acuerdo + no-vig + EV se marcan BET; underdogs quedan LEAN / NO AUTO BET.")
 
 scan_tab, qb_tab, elo_tab = st.tabs(["🤖 Scanner", "🎯 QB Props", "📈 ELO"])
 
@@ -214,7 +217,8 @@ with scan_tab:
 
             past_games = historico_antes(df_games, season, week)
             past_pbp = historico_antes(df_pbp, season, week) if not df_pbp.empty else pd.DataFrame()
-            ml_engine, ml_ok, xgb_engine, xgb_ok, elo_engine = motores(past_games, past_pbp)
+            with st.spinner("Entrenando modelos con datos anteriores a esta jornada..."):
+                ml_engine, ml_ok, xgb_engine, xgb_ok, elo_engine = motores(past_games, past_pbp)
             picks, diag = [], []
             if not ml_ok:
                 st.warning("No hay histórico prepartido suficiente para entrenar el modelo en este corte temporal.")
