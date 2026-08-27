@@ -9,6 +9,7 @@ from sklearn.metrics import mean_absolute_error
 from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_ml_engine import PredictorNFL_ML
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
+from modules.nfl_pbp_engine import SITUATIONAL_METRICS, construir_pbp_pregame
 
 
 def dec(am):
@@ -72,23 +73,32 @@ def pbp_subset(mode):
     return [f'{side}_{m}_{w}' for side in ['home','away'] for m in metrics for w in windows]
 
 
+def situational_subset():
+    return [f'{side}_{m}_{w}' for side in ['home','away'] for m in SITUATIONAL_METRICS for w in [4,8]]
+
+
 def evaluate(raw,pbp,label):
     use_pbp_rows = label != 'BASE'
     builder=PredictorNFL_ML()
     feat=builder.construir_features_pregame(raw,pbp if use_pbp_rows else None)
+    if label == 'SITUATIONAL':
+        situ=construir_pbp_pregame(raw,pbp,metrics=SITUATIONAL_METRICS)
+        feat=feat.merge(situ,on='game_id',how='left')
     market_cols=['game_id','spread_line','total_line','home_moneyline','away_moneyline','over_odds','under_odds','home_score','away_score']
     df=feat.merge(raw[[c for c in market_cols if c in raw.columns]],on='game_id',how='left')
 
-    # Para toda variante PBP, incluida MATCHED_BASE, usamos exactamente los juegos
-    # donde ambas partes tienen rolling PBP prepartido disponible.
     if use_pbp_rows:
         eligibility=['home_off_epa_play_4','away_off_epa_play_4']
         assert all(c in df.columns for c in eligibility)
         df=df.dropna(subset=eligibility).copy()
 
     total_features=BASE_FEATURES
-    margin_features=BASE_FEATURES + ([c for c in pbp_subset('FULL') if c in df.columns] if label == 'HYBRID' else [c for c in pbp_subset(label) if c in df.columns])
-    if label != 'HYBRID':
+    if label == 'HYBRID':
+        margin_features=BASE_FEATURES + [c for c in pbp_subset('FULL') if c in df.columns]
+    elif label == 'SITUATIONAL':
+        margin_features=BASE_FEATURES + [c for c in pbp_subset('FULL') if c in df.columns] + [c for c in situational_subset() if c in df.columns]
+    else:
+        margin_features=BASE_FEATURES + [c for c in pbp_subset(label) if c in df.columns]
         total_features=BASE_FEATURES + [c for c in pbp_subset(label) if c in df.columns]
 
     required=list(dict.fromkeys(total_features+margin_features+['puntos_totales','margen_local']))
@@ -155,14 +165,16 @@ def main():
     if 'game_type' in raw.columns: raw=raw[raw['game_type'].isin(['REG','POST','WC','DIV','CON','SB'])].copy()
     pbp=pd.read_csv('data/historico_nfl_pbp_team_game.csv')
     results={}
-    for label in ['BASE','MATCHED_BASE','EPA8','EPA48','CORE8','FULL','HYBRID']:
+    for label in ['BASE','MATCHED_BASE','EPA8','EPA48','CORE8','FULL','HYBRID','SITUATIONAL']:
         results[label]=evaluate(raw,pbp,label)
 
-    matched=results['MATCHED_BASE']; hybrid=results['HYBRID']
+    matched=results['MATCHED_BASE']; hybrid=results['HYBRID']; situ=results['SITUATIONAL']
     print(f"HYBRID_vs_MATCHED delta_total_mae={hybrid['total_mae']-matched['total_mae']:.4f} delta_margin_mae={hybrid['margin_mae']-matched['margin_mae']:.4f} delta_winner_pp={(hybrid['winner_acc']-matched['winner_acc'])*100:.2f} delta_ats_pp={(hybrid['ats_acc']-matched['ats_acc'])*100:.2f} delta_ou_pp={(hybrid['ou_dir_acc']-matched['ou_dir_acc'])*100:.2f} delta_ml_roi_pp={hybrid['ml_roi']-matched['ml_roi']:.2f} delta_ou_roi_pp={hybrid['ou_roi']-matched['ou_roi']:.2f}")
+    print(f"SITUATIONAL_vs_HYBRID delta_margin_mae={situ['margin_mae']-hybrid['margin_mae']:.4f} delta_winner_pp={(situ['winner_acc']-hybrid['winner_acc'])*100:.2f} delta_ats_pp={(situ['ats_acc']-hybrid['ats_acc'])*100:.2f} delta_ml_roi_pp={situ['ml_roi']-hybrid['ml_roi']:.2f}")
     assert hybrid['test'] == matched['test'] >= 150
     assert hybrid['margin_mae'] < matched['margin_mae']
     assert hybrid['ml_roi'] > 0
+    assert situ['test'] >= 150
 
 
 if __name__=='__main__':
