@@ -2,6 +2,14 @@ import datetime as dt
 import os
 from zoneinfo import ZoneInfo
 
+# Limit native math-library parallelism before NumPy/scikit-learn are imported.
+# This is important on Streamlit Community Cloud, where aggressive threading can
+# cause memory/CPU spikes and a white screen during a rerun.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
 import numpy as np
 import pandas as pd
 import requests
@@ -9,7 +17,6 @@ import streamlit as st
 import nfl_data_py as nfl
 
 from modules.nfl_calibration import (
-    calibration_diagnostics,
     empirical_residual_gt,
     empirical_residual_two_way,
     historico_antes,
@@ -19,7 +26,6 @@ from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_ml_engine import PredictorNFL_ML
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 from modules.nfl_qb_engine import PredictorYardasQB
-from modules.nfl_xgb_engine import PredictorXGBoostSpread
 
 st.set_page_config(page_title="NFL Analytics Real V2", layout="wide", page_icon="🏈")
 st.title("🏈 NFL Analytics Real V2")
@@ -40,9 +46,8 @@ ESTADIOS = {
 }
 
 VALIDATION = {
-    "moneyline_2025_picks": 39, "moneyline_2025_wins": 25, "moneyline_2025_roi": 4.03,
     "favorite_wf_picks": 87, "favorite_wf_wins": 63, "favorite_wf_roi": 13.07,
-    "spread_ml_accuracy": 53.14, "xgb_accuracy": 51.13, "ou_2025_roi": -3.19,
+    "spread_ml_accuracy": 53.14, "ou_2025_roi": -3.19,
 }
 
 
@@ -65,22 +70,26 @@ def no_vig(a, b):
     if da is None or db is None:
         return None, None
     ia, ib = 1 / da, 1 / db
-    s = ia + ib
-    return (ia / s, ib / s) if s > 0 else (None, None)
+    total = ia + ib
+    return (ia / total, ib / total) if total > 0 else (None, None)
 
 
 def two_way(a, b):
     if a is None or b is None:
         return None, None
-    s = float(a) + float(b)
-    return (100 * float(a) / s, 100 * float(b) / s) if s > 0 else (None, None)
+    total = float(a) + float(b)
+    return (100 * float(a) / total, 100 * float(b) / total) if total > 0 else (None, None)
 
 
 def value_metrics(pct, odd, mkt):
-    d = american_to_decimal(odd)
-    if d is None or mkt is None or pct is None:
+    decimal = american_to_decimal(odd)
+    if decimal is None or mkt is None or pct is None:
         return None
-    return {"ev": ((pct / 100) * d - 1) * 100, "edge": (pct / 100 - mkt) * 100, "decimal": d}
+    return {
+        "ev": ((pct / 100) * decimal - 1) * 100,
+        "edge": (pct / 100 - mkt) * 100,
+        "decimal": decimal,
+    }
 
 
 def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self, odd_other):
@@ -97,12 +106,14 @@ def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self,
     is_favorite = odd < 0
     return {
         "Acción": "BET" if is_favorite else "LEAN — NO AUTO BET",
-        "Partido": partido, "Mercado": "Moneyline", "Apuesta": apuesta,
+        "Partido": partido,
+        "Apuesta": apuesta,
         "Prob calibrada": round(p, 1),
-        "Soporte Elo/Emp": f"{support_probs[0]:.1f}% / {support_probs[1]:.1f}%",
-        "Desacuerdo pp": round(disagreement, 1),
-        "Momio real": int(odd), "Edge no-vig pp": round(vm["edge"], 2),
+        "Momio real": int(odd),
+        "Edge no-vig pp": round(vm["edge"], 2),
         "EV %": round(vm["ev"], 2),
+        "Desacuerdo pp": round(disagreement, 1),
+        "Soporte Elo/Emp": f"{support_probs[0]:.1f}% / {support_probs[1]:.1f}%",
         "_favorite": is_favorite,
         "_score": 1.5 * vm["edge"] + vm["ev"] - 0.3 * disagreement,
     }
@@ -126,14 +137,17 @@ def cargar_schedule(season):
 
 
 @st.cache_resource
-def motores(df, pbp):
+def motor_ml(df, pbp):
     ml = PredictorNFL_ML()
-    ml_ok = ml.entrenar(df, df_pbp_team_game=pbp)
-    xgb = PredictorXGBoostSpread()
-    xgb_ok = xgb.entrenar(df)
+    ok = ml.entrenar(df, df_pbp_team_game=pbp)
+    return ml, ok
+
+
+@st.cache_resource
+def motor_elo(df):
     elo = MotorELONFL()
     elo.actualizar_ratings(df)
-    return ml, ml_ok, xgb, xgb_ok, elo
+    return elo
 
 
 def roof_is_dome(roof, fallback=False):
@@ -160,10 +174,14 @@ def forecast_kickoff(team, gameday, gametime, roof=None):
         et = dt.datetime.combine(date, dt.time.fromisoformat(hhmm), tzinfo=ZoneInfo("America/New_York"))
         utc = et.astimezone(ZoneInfo("UTC"))
         params = {
-            "latitude": lat, "longitude": lon,
+            "latitude": lat,
+            "longitude": lon,
             "hourly": "temperature_2m,wind_speed_10m",
-            "temperature_unit": "fahrenheit", "wind_speed_unit": "mph",
-            "timezone": "UTC", "start_date": utc.date().isoformat(), "end_date": utc.date().isoformat(),
+            "temperature_unit": "fahrenheit",
+            "wind_speed_unit": "mph",
+            "timezone": "UTC",
+            "start_date": utc.date().isoformat(),
+            "end_date": utc.date().isoformat(),
         }
         data = requests.get("https://api.open-meteo.com/v1/forecast", params=params, timeout=8).json()
         times = pd.to_datetime(data.get("hourly", {}).get("time", []), utc=True)
@@ -177,31 +195,74 @@ def forecast_kickoff(team, gameday, gametime, roof=None):
         return None, None, False, "Forecast no disponible"
 
 
-df_games, df_qbs, df_pbp = cargar_historico()
-ml_global, ml_global_ok, xgb_global, xgb_global_ok, elo_global = motores(df_games, df_pbp)
+def guardar_resultados(bets, leans, diag, season, week):
+    st.session_state["scan_bets"] = bets
+    st.session_state["scan_leans"] = leans
+    st.session_state["scan_diag"] = diag
+    st.session_state["scan_label"] = f"Temporada {int(season)} · Semana {int(week)}"
 
-with st.expander("✅ Datos y validación", expanded=True):
+
+def render_resultados():
+    bets = st.session_state.get("scan_bets")
+    leans = st.session_state.get("scan_leans")
+    diag = st.session_state.get("scan_diag")
+    label = st.session_state.get("scan_label")
+    if bets is None and leans is None and diag is None:
+        return
+
+    st.divider()
+    if label:
+        st.caption(f"Último análisis: {label}")
+
+    if isinstance(bets, pd.DataFrame) and not bets.empty:
+        top = bets.iloc[0]
+        st.markdown("### ⭐ Recomendación principal Moneyline")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Pick", str(top["Apuesta"]))
+        c2.metric("Probabilidad", f"{top['Prob calibrada']:.1f}%")
+        c3.metric("Edge no-vig", f"{top['Edge no-vig pp']:.2f} pp")
+        c4.metric("EV", f"{top['EV %']:.2f}%")
+        st.caption(f"{top['Partido']} · momio {int(top['Momio real'])} · desacuerdo entre modelos {top['Desacuerdo pp']:.1f} pp")
+
+        if len(bets) > 1:
+            st.markdown("### Otras recomendaciones BET")
+            st.dataframe(bets.iloc[1:].reset_index(drop=True), width="stretch", hide_index=True)
+    else:
+        st.info("No hay favoritos Moneyline con valor suficientemente robusto para BET en este corte temporal.")
+
+    if isinstance(leans, pd.DataFrame) and not leans.empty:
+        with st.expander("Ver underdogs con señal (LEAN — NO AUTO BET)"):
+            st.caption("Se muestran sólo como diagnóstico; el walk-forward no respaldó underdogs como filtro automático estable.")
+            st.dataframe(leans.reset_index(drop=True), width="stretch", hide_index=True)
+
+    if isinstance(diag, pd.DataFrame) and not diag.empty:
+        with st.expander("Diagnóstico completo de la jornada"):
+            st.dataframe(diag, width="stretch", hide_index=True)
+
+
+df_games, df_qbs, df_pbp = cargar_historico()
+elo_global = motor_elo(df_games)
+
+with st.expander("✅ Estado del sistema", expanded=False):
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("PBP real", "ACTIVO" if (ml_global_ok and ml_global.usa_pbp) else "NO DISPONIBLE", f"{len(df_pbp):,} equipo-partidos")
-    c2.metric("ML favoritos WF", f"{VALIDATION['favorite_wf_wins']}/{VALIDATION['favorite_wf_picks']}", f"ROI agregado +{VALIDATION['favorite_wf_roi']}%")
-    c3.metric("Spread", "NO AUTO BET", f"ML {VALIDATION['spread_ml_accuracy']}% / XGB {VALIDATION['xgb_accuracy']}%")
-    c4.metric("O/U", "NO AUTO BET", f"ROI previo {VALIDATION['ou_2025_roi']}%")
-    if ml_global_ok:
-        d = calibration_diagnostics(ml_global.residuales_margen)
-        st.caption(f"Calibración margen OOS: n={d['n']} · bias={d['bias']} · MAE residual={d['mae']}. Probabilidades usan residuales OOS empíricos, no Normal fija.")
-    st.caption("Filtro Moneyline validado: sólo favoritos que pasan probabilidad + acuerdo + no-vig + EV se marcan BET. Underdogs quedan como LEAN / NO AUTO BET. Spread/O-U permanecen bloqueados.")
+    c1.metric("PBP real", "ACTIVO" if not df_pbp.empty else "NO DISPONIBLE", f"{len(df_pbp):,} equipo-partidos")
+    c2.metric("ML favoritos WF", f"{VALIDATION['favorite_wf_wins']}/{VALIDATION['favorite_wf_picks']}", f"ROI histórico +{VALIDATION['favorite_wf_roi']}%")
+    c3.metric("Spread", "NO AUTO BET", f"Accuracy ref. {VALIDATION['spread_ml_accuracy']}%")
+    c4.metric("O/U", "NO AUTO BET", f"ROI ref. {VALIDATION['ou_2025_roi']}%")
+    st.caption("El arranque no entrena modelos pesados. El entrenamiento Moneyline ocurre sólo al analizar una jornada y queda cacheado por corte temporal.")
 
 scan_tab, qb_tab, elo_tab = st.tabs(["🤖 Scanner", "🎯 QB Props", "📈 ELO"])
 
 with scan_tab:
-    a, b, c = st.columns(3)
+    a, b = st.columns(2)
     season = a.number_input("Temporada", 2021, 2030, 2026, 1)
     week = b.number_input("Semana", 1, 22, 1, 1)
-    top_n = c.slider("Máximo de BET Moneyline", 1, 10, 3)
+    st.caption("El sistema ordena automáticamente las recomendaciones. Ya no necesitas elegir cuántos picks mostrar.")
 
-    if st.button("Analizar jornada", type="primary"):
+    if st.button("🔎 Analizar jornada", type="primary", use_container_width=True):
         sched = cargar_schedule(season)
         if sched.empty:
+            guardar_resultados(pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), season, week)
             st.error("No se pudo obtener el schedule real.")
         else:
             games = sched[sched["week"] == int(week)].copy()
@@ -214,7 +275,11 @@ with scan_tab:
 
             past_games = historico_antes(df_games, season, week)
             past_pbp = historico_antes(df_pbp, season, week) if not df_pbp.empty else pd.DataFrame()
-            ml_engine, ml_ok, xgb_engine, xgb_ok, elo_engine = motores(past_games, past_pbp)
+
+            with st.spinner("Preparando modelo Moneyline con datos anteriores a esta jornada..."):
+                ml_engine, ml_ok = motor_ml(past_games, past_pbp)
+                elo_engine = motor_elo(past_games)
+
             picks, diag = [], []
             if not ml_ok:
                 st.warning("No hay histórico prepartido suficiente para entrenar el modelo en este corte temporal.")
@@ -230,15 +295,19 @@ with scan_tab:
                 roof = g.get("roof")
                 neutral = str(g.get("location", "")).strip().lower() == "neutral"
                 if neutral:
-                    diag.append({"Partido": partido, "Estado": "NO BET — sede neutral requiere estadio/contexto verificado", "Spread": spread, "Total": line})
+                    diag.append({"Partido": partido, "Estado": "NO BET — sede neutral requiere contexto verificado", "Spread": spread, "Total": line})
                     continue
 
                 temp, wind, dome, wmsg = forecast_kickoff(home, g.get("gameday"), g.get("gametime"), roof)
                 ml = ml_engine.predecir_contexto(week, home, away, temp, wind, dome, hr, ar) if ml_ok else None
                 emp = simular_nfl_montecarlo(home, away, past_games, line, spread)
                 row = {
-                    "Partido": partido, "PBP real": bool(ml and ml.get("Usa_PBP_Real")),
-                    "Clima kickoff": wmsg, "ML odds H/A": f"{hm}/{am}", "Spread": spread, "Total": line,
+                    "Partido": partido,
+                    "PBP real": bool(ml and ml.get("Usa_PBP_Real")),
+                    "Clima kickoff": wmsg,
+                    "ML odds H/A": f"{hm}/{am}",
+                    "Spread": spread,
+                    "Total": line,
                     "Histórico visible": len(past_games),
                 }
                 if not ml or not emp.get("Disponible"):
@@ -265,16 +334,15 @@ with scan_tab:
                 if spread is not None:
                     ml_cov = empirical_residual_gt(ml.get("ML_Margen_Local_Esperado"), spread, ml_engine.residuales_margen)
                     e_h, _ = two_way(emp["Spread"].get("Cubre Local"), emp["Spread"].get("Cubre Visita"))
-                    xh = xgb_engine.predecir_probabilidad_cover(week, spread, line, home, away, hr, ar) if xgb_ok and line is not None else None
-                    row["Spread probs Cal/Emp/XGB"] = f"{None if ml_cov is None else round(ml_cov,1)} / {None if e_h is None else round(e_h,1)} / {None if xh is None else round(xh,1)}"
-                    row["Spread estado"] = "NO AUTO BET — requiere edge walk-forward"
+                    row["Spread probs Cal/Emp"] = f"{None if ml_cov is None else round(ml_cov,1)} / {None if e_h is None else round(e_h,1)}"
+                    row["Spread estado"] = "NO AUTO BET"
 
                 weather_ok = dome or (temp is not None and wind is not None)
                 if line is not None and weather_ok:
                     mo = empirical_residual_gt(ml.get("ML_Puntos_Totales_Esperados"), line, ml_engine.residuales_total)
                     eo, _ = two_way(emp["Over_Under"].get("Prob Over"), emp["Over_Under"].get("Prob Under"))
                     row["O/U probs Cal/Emp"] = f"{None if mo is None else round(mo,1)} / {None if eo is None else round(eo,1)}"
-                    row["O/U estado"] = "NO AUTO BET — requiere edge walk-forward"
+                    row["O/U estado"] = "NO AUTO BET"
 
                 row["ML prob calibrada H/A"] = f"{pml_h}/{pml_a}"
                 row["Elo H"] = round(pelo, 1)
@@ -284,22 +352,14 @@ with scan_tab:
 
             if picks:
                 all_candidates = pd.DataFrame(picks).sort_values("_score", ascending=False)
-                bets = all_candidates[all_candidates["_favorite"]].head(top_n).drop(columns=["_favorite", "_score"])
+                bets = all_candidates[all_candidates["_favorite"]].head(5).drop(columns=["_favorite", "_score"])
                 leans = all_candidates[~all_candidates["_favorite"]].drop(columns=["_favorite", "_score"])
-                if not bets.empty:
-                    st.success(f"{len(bets)} BET Moneyline pasan filtros OOS y filtro estable de favoritos.")
-                    st.dataframe(bets, width="stretch", hide_index=True)
-                else:
-                    st.info("No hay favoritos Moneyline con valor suficientemente robusto para BET en este corte temporal.")
-                if not leans.empty:
-                    st.markdown("### LEAN — underdogs con señal, no auto bet")
-                    st.caption("Se muestran para diagnóstico; el walk-forward 2023–2025 no respaldó underdogs como filtro automático estable.")
-                    st.dataframe(leans, width="stretch", hide_index=True)
             else:
-                st.info("No hay Moneyline con valor suficientemente robusto en este corte temporal.")
-            if diag:
-                st.markdown("### Diagnóstico completo")
-                st.dataframe(pd.DataFrame(diag), width="stretch", hide_index=True)
+                bets, leans = pd.DataFrame(), pd.DataFrame()
+
+            guardar_resultados(bets, leans, pd.DataFrame(diag), season, week)
+
+    render_resultados()
 
 with qb_tab:
     st.info("QB props permanecen manuales y descriptivos; no se presentan como probabilidad calibrada de apuesta.")
@@ -316,7 +376,10 @@ with qb_tab:
                 po, pu = no_vig(over, under)
                 vo = value_metrics(res["Prob_Over_Yardas"], over, po)
                 vu = value_metrics(res["Prob_Under_Yardas"], under, pu)
-                st.write({"Frecuencia Over edge pp (no calibrada)": round(vo["edge"], 2), "Frecuencia Under edge pp (no calibrada)": round(vu["edge"], 2)})
+                st.write({
+                    "Frecuencia Over edge pp (no calibrada)": round(vo["edge"], 2),
+                    "Frecuencia Under edge pp (no calibrada)": round(vu["edge"], 2),
+                })
 
 with elo_tab:
     rank = pd.DataFrame(elo_global.obtener_power_ranking(), columns=["Equipo", "ELO"])
