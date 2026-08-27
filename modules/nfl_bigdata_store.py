@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import duckdb
+import numpy as np
 import pandas as pd
 
 from modules.nfl_pbp_engine import agregar_pbp_por_equipo_partido
@@ -98,7 +99,13 @@ def cargar_pbp_preferente(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PBP_PARQ
     return df
 
 
-def validar_paridad_csv_parquet(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PBP_PARQUET):
+def validar_paridad_csv_parquet(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PBP_PARQUET, rtol=1e-6, atol=1e-8):
+    """Valida que CSV y Parquet representen los mismos datos.
+
+    CSV serializa floats a texto y al leerlos puede introducir diferencias binarias
+    minúsculas frente al Parquet. Por eso la paridad numérica usa tolerancias estrictas,
+    mientras claves y columnas no numéricas siguen exigiendo igualdad exacta.
+    """
     csv = pd.read_csv(csv_path).sort_values(["season", "week", "game_id", "team"]).reset_index(drop=True)
     pq = leer_pbp_parquet(parquet_dir).sort_values(["season", "week", "game_id", "team"]).reset_index(drop=True)
     common = [c for c in csv.columns if c in pq.columns]
@@ -108,10 +115,41 @@ def validar_paridad_csv_parquet(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PB
     for key in ["game_id", "season", "week", "team"]:
         if not csv[key].astype(str).equals(pq[key].astype(str)):
             raise AssertionError(f"Clave distinta: {key}")
-    num = [c for c in common if c not in {"game_id", "team", "opponent"}]
-    for c in num:
+
+    max_abs_diff = 0.0
+    numeric_checked = 0
+    for c in common:
+        if c in {"game_id", "team", "opponent"}:
+            continue
         a = pd.to_numeric(csv[c], errors="coerce")
         b = pd.to_numeric(pq[c], errors="coerce")
-        if not a.fillna(0).round(10).equals(b.fillna(0).round(10)):
-            raise AssertionError(f"Métrica distinta: {c}")
-    return {"rows": len(csv), "columns": len(common), "ok": True}
+        # Sólo tratamos como numérica una columna cuando ambos lados son realmente
+        # numéricos (ignorando nulos). Las demás se comparan como texto abajo.
+        if a.notna().sum() == csv[c].notna().sum() and b.notna().sum() == pq[c].notna().sum():
+            av = a.to_numpy(dtype=float)
+            bv = b.to_numpy(dtype=float)
+            if not np.allclose(av, bv, rtol=rtol, atol=atol, equal_nan=True):
+                diff = np.abs(av - bv)
+                finite = diff[np.isfinite(diff)]
+                observed = float(finite.max()) if finite.size else float("inf")
+                raise AssertionError(f"Métrica distinta: {c}; max_abs_diff={observed:.12g}")
+            diff = np.abs(av - bv)
+            finite = diff[np.isfinite(diff)]
+            if finite.size:
+                max_abs_diff = max(max_abs_diff, float(finite.max()))
+            numeric_checked += 1
+        else:
+            left = csv[c].fillna("<NA>").astype(str)
+            right = pq[c].fillna("<NA>").astype(str)
+            if not left.equals(right):
+                raise AssertionError(f"Columna distinta: {c}")
+
+    return {
+        "rows": len(csv),
+        "columns": len(common),
+        "numeric_checked": numeric_checked,
+        "max_abs_diff": max_abs_diff,
+        "rtol": rtol,
+        "atol": atol,
+        "ok": True,
+    }
