@@ -1,0 +1,23 @@
+name: NFL Stable Filters Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  stable-filters:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Refresh schedule
+        run: python descargar_historico_nfl.py
+      - name: Refresh play-by-play
+        run: python descargar_pbp_nfl.py
+      - name: Compile stable filter test
+        run: python -m py_compile backtest_nfl_stable_filters.py backtest_nfl_walkforward.py
+      - name: Strict walk-forward filter validation
+        run: python backtest_nfl_stable_filters.py
