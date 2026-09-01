@@ -67,6 +67,26 @@ def value_metrics(pct, odd, mkt):
     return {"ev": ((pct / 100) * dec - 1) * 100, "edge": (pct / 100 - mkt) * 100}
 
 
+def kelly_stake(pct, odd, bankroll, fraction=0.25, max_fraction=0.05):
+    """Kelly fraccional con tope de riesgo sobre el bankroll."""
+    dec = american_to_decimal(odd)
+    bank = num(bankroll)
+    prob = num(pct)
+    if dec is None or bank is None or bank <= 0 or prob is None:
+        return 0.0, 0.0, False
+
+    p = min(max(prob / 100.0, 0.0), 1.0)
+    b = dec - 1.0
+    if b <= 0:
+        return 0.0, 0.0, False
+
+    full_kelly = max(0.0, (b * p - (1.0 - p)) / b)
+    raw_fraction = full_kelly * float(fraction)
+    capped_fraction = min(raw_fraction, float(max_fraction))
+    was_capped = raw_fraction > capped_fraction + 1e-12
+    return 100.0 * capped_fraction, bank * capped_fraction, was_capped
+
+
 def two_way(a, b):
     if a is None or b is None:
         return None, None
@@ -74,7 +94,7 @@ def two_way(a, b):
     return (100 * float(a) / total, 100 * float(b) / total) if total > 0 else (None, None)
 
 
-def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self, odd_other):
+def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self, odd_other, bankroll):
     p = primary_with_agreement(primary_prob, support_probs, max_disagreement=15.0)
     if p is None:
         return None
@@ -85,6 +105,9 @@ def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self,
     odd = num(odd_self)
     if vm is None or odd is None or p < 54.0 or vm["edge"] < 3.0 or vm["ev"] < 3.0:
         return None
+
+    is_favorite = odd < 0
+    kelly_pct, stake, kelly_capped = kelly_stake(p, odd, bankroll)
     return {
         "Partido": partido,
         "Apuesta": apuesta,
@@ -92,8 +115,11 @@ def moneyline_candidate(partido, apuesta, primary_prob, support_probs, odd_self,
         "Momio": int(odd),
         "Edge": round(vm["edge"], 2),
         "EV": round(vm["ev"], 2),
+        "Kelly 1/4 %": round(kelly_pct, 2),
+        "Apostar $": round(stake, 2) if is_favorite else 0.0,
+        "Kelly limitado": "Sí" if kelly_capped else "No",
         "Desacuerdo": round(disagreement, 1),
-        "_favorite": odd < 0,
+        "_favorite": is_favorite,
         "_score": 1.5 * vm["edge"] + vm["ev"] - 0.3 * disagreement,
     }
 
@@ -175,6 +201,26 @@ def guardar(bets, leans, diag, label):
     st.session_state["nfl_label"] = label
 
 
+def render_pick_card(row, auto_bet=True):
+    st.markdown(f"**{row['Apuesta']}**")
+    st.caption(str(row["Partido"]))
+    st.write(
+        f"Prob {row['Probabilidad']:.1f}% · Edge {row['Edge']:.2f} pp · "
+        f"EV {row['EV']:.2f}% · Momio {int(row['Momio'])}"
+    )
+    if auto_bet:
+        cap_note = " · tope 5% aplicado" if str(row.get("Kelly limitado", "No")) == "Sí" else ""
+        st.write(
+            f"**Kelly 1/4: {row['Kelly 1/4 %']:.2f}% · "
+            f"Apostar ${row['Apostar $']:,.2f}**{cap_note}"
+        )
+    else:
+        st.write(
+            f"Kelly 1/4 teórico: {row['Kelly 1/4 %']:.2f}% · "
+            "**Apostar $0.00 (LEAN — NO AUTO BET)**"
+        )
+
+
 def render():
     bets = st.session_state.get("nfl_bets")
     leans = st.session_state.get("nfl_leans")
@@ -185,23 +231,25 @@ def render():
     st.divider()
     if label:
         st.caption(label)
+
     if isinstance(bets, pd.DataFrame) and not bets.empty:
-        top = bets.iloc[0]
-        st.subheader("⭐ Recomendación principal")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Pick", top["Apuesta"])
-        c2.metric("Probabilidad", f"{top['Probabilidad']:.1f}%")
-        c3.metric("Edge", f"{top['Edge']:.2f} pp")
-        c4.metric("EV", f"{top['EV']:.2f}%")
-        st.caption(f"{top['Partido']} · momio {int(top['Momio'])}")
-        if len(bets) > 1:
-            st.markdown("#### Otras recomendaciones")
-            st.dataframe(bets.iloc[1:].reset_index(drop=True), width="stretch", hide_index=True)
+        st.subheader("⭐ Recomendaciones")
+        for _, row in bets.reset_index(drop=True).iterrows():
+            render_pick_card(row, auto_bet=True)
+            st.markdown("---")
     else:
         st.info("No hay una recomendación suficientemente robusta en este corte temporal.")
+
     if isinstance(leans, pd.DataFrame) and not leans.empty:
-        with st.expander("Señales secundarias — no auto bet"):
-            st.dataframe(leans.reset_index(drop=True), width="stretch", hide_index=True)
+        with st.expander(f"LEAN ({len(leans)}) — señales secundarias"):
+            st.caption(
+                "Los underdogs se muestran sólo como diagnóstico. "
+                "El Kelly es teórico y la apuesta recomendada permanece en $0."
+            )
+            for _, row in leans.reset_index(drop=True).iterrows():
+                render_pick_card(row, auto_bet=False)
+                st.markdown("---")
+
     if isinstance(diag, pd.DataFrame) and not diag.empty:
         with st.expander("Diagnóstico completo"):
             st.dataframe(diag, width="stretch", hide_index=True)
@@ -210,13 +258,21 @@ def render():
 df_games, df_pbp = cargar_historico()
 
 with st.form("scanner_form", clear_on_submit=False):
-    a, b = st.columns(2)
+    a, b, c = st.columns(3)
     season = a.number_input("Temporada", min_value=2021, max_value=2030, value=2026, step=1)
     week = b.number_input("Semana", min_value=1, max_value=22, value=1, step=1)
+    bankroll = c.number_input(
+        "Bankroll $",
+        min_value=100.0,
+        max_value=1000000.0,
+        value=5000.0,
+        step=500.0,
+        help="Stake = 1/4 Kelly con tope máximo de 5% del bankroll por BET.",
+    )
     submitted = st.form_submit_button("🔎 Analizar jornada", type="primary", use_container_width=True)
 
 if submitted:
-    label = f"Temporada {int(season)} · Semana {int(week)}"
+    label = f"Temporada {int(season)} · Semana {int(week)} · Bankroll ${bankroll:,.2f}"
     try:
         sched = cargar_schedule(season)
         if sched.empty:
@@ -264,8 +320,8 @@ if submitted:
                         p_h, p_a = empirical_residual_two_way(ml.get("ML_Margen_Local_Esperado"), 0.0, ml_engine.residuales_margen)
                         e_h, e_a = two_way(emp["Moneyline"].get("Gana Local"), emp["Moneyline"].get("Gana Visita"))
                         elo_h = 100 * elo_engine.calcular_probabilidad_elo(elo_engine.ratings.get(home, 1500), elo_engine.ratings.get(away, 1500))
-                        ch = moneyline_candidate(partido, f"{home} ML", p_h, [elo_h, e_h], hm, am)
-                        ca = moneyline_candidate(partido, f"{away} ML", p_a, [100 - elo_h, e_a], am, hm)
+                        ch = moneyline_candidate(partido, f"{home} ML", p_h, [elo_h, e_h], hm, am, bankroll)
+                        ca = moneyline_candidate(partido, f"{away} ML", p_a, [100 - elo_h, e_a], am, hm, bankroll)
                         if ch:
                             picks.append(ch)
                         if ca:
@@ -294,6 +350,7 @@ with st.expander("Estado del sistema"):
     st.write({
         "PBP": "ACTIVO" if not df_pbp.empty else "NO DISPONIBLE",
         "Moneyline": "runtime ligero; BET automático sólo en favoritos validados",
+        "Kelly": "1/4 Kelly con tope de 5% del bankroll por BET",
         "Spread": "NO AUTO BET",
         "Over/Under": "NO AUTO BET",
     })
