@@ -42,6 +42,20 @@ def _request_json(session, method: str, url: str, **kwargs):
     return response.json()
 
 
+def _profit_for_moneyline(stake: float, odds: float, won: bool, push: bool = False) -> float:
+    if push:
+        return 0.0
+    if not won:
+        return round(-abs(float(stake)), 2)
+    stake = abs(float(stake))
+    odds = float(odds)
+    if odds > 0:
+        return round(stake * odds / 100.0, 2)
+    if odds < 0:
+        return round(stake * 100.0 / abs(odds), 2)
+    return 0.0
+
+
 def sync_bets(
     bets: Iterable[Mapping[str, Any]],
     season: int,
@@ -169,6 +183,146 @@ def sync_bets(
             "ok": False,
             "inserted": 0,
             "updated": 0,
+            "worksheet": target_worksheet,
+            "message": f"{type(exc).__name__}: {str(exc) or repr(exc)}"[:1000],
+            "credential_type": type(credentials).__name__ if credentials is not None else "unresolved",
+            "service_account_email": getattr(credentials, "service_account_email", None) if credentials is not None else None,
+            "adc_project": project_id,
+        }
+
+
+def settle_pending(
+    sheet_id: str | None = None,
+    worksheet: str | None = None,
+):
+    """Settle PENDIENTE moneyline BETs from final NFL scores and write profit in MXN.
+
+    GANADA: profit is the net win at the stored American odds.
+    PERDIDA: profit is -stake.
+    PUSH: profit is 0 (used for an NFL tie).
+    The function is idempotent and never changes rows already settled.
+    """
+    target_sheet_id = (sheet_id or SHEET_ID).strip()
+    target_worksheet = (worksheet or WORKSHEET).strip() or "NFL_Picks"
+    credentials = None
+    project_id = None
+    try:
+        import pandas as pd
+        import nfl_data_py as nfl
+        from google.auth.transport.requests import AuthorizedSession
+
+        credentials, project_id = _credentials()
+        session = AuthorizedSession(credentials)
+        base = f"https://sheets.googleapis.com/v4/spreadsheets/{target_sheet_id}/values"
+        encoded_range = quote(f"{target_worksheet}!A:P", safe="")
+        values_resp = _request_json(session, "GET", f"{base}/{encoded_range}")
+        values = values_resp.get("values", [])
+        if len(values) <= 1:
+            return {"ok": True, "settled": 0, "pending": 0, "message": "no picks"}
+        if values[0][: len(HEADERS)] != HEADERS:
+            return {"ok": False, "settled": 0, "pending": 0, "message": "header mismatch"}
+
+        pending_rows = []
+        seasons = set()
+        for row_number, row in enumerate(values[1:], start=2):
+            result = row[12].strip().upper() if len(row) > 12 and row[12] else "PENDIENTE"
+            if result != "PENDIENTE":
+                continue
+            if len(row) < 11:
+                continue
+            try:
+                season = int(float(row[1]))
+                week = int(float(row[2]))
+                odds = float(row[6])
+                stake = float(row[10])
+            except Exception:
+                continue
+            game = row[3].strip()
+            pick = row[4].strip()
+            if " @ " not in game or not pick.endswith(" ML"):
+                continue
+            away, home = [x.strip() for x in game.split(" @ ", 1)]
+            picked_team = pick[:-3].strip()
+            pending_rows.append({
+                "row_number": row_number,
+                "season": season,
+                "week": week,
+                "away": away,
+                "home": home,
+                "picked_team": picked_team,
+                "odds": odds,
+                "stake": stake,
+            })
+            seasons.add(season)
+
+        if not pending_rows:
+            return {"ok": True, "settled": 0, "pending": 0, "message": "no pending picks"}
+
+        schedules = nfl.import_schedules(sorted(seasons))
+        updates = []
+        settled = 0
+        still_pending = 0
+        now_mx = datetime.now(ZoneInfo("America/Mexico_City")).strftime("%Y-%m-%d %H:%M:%S")
+
+        for item in pending_rows:
+            matches = schedules[
+                (schedules["week"] == item["week"])
+                & (schedules["home_team"] == item["home"])
+                & (schedules["away_team"] == item["away"])
+            ]
+            if "season" in schedules.columns:
+                matches = matches[schedules.loc[matches.index, "season"] == item["season"]]
+            if matches.empty:
+                still_pending += 1
+                continue
+
+            game_row = matches.iloc[-1]
+            home_score = game_row.get("home_score")
+            away_score = game_row.get("away_score")
+            if pd.isna(home_score) or pd.isna(away_score):
+                still_pending += 1
+                continue
+
+            home_score = float(home_score)
+            away_score = float(away_score)
+            if home_score == away_score:
+                status = "PUSH"
+                profit = _profit_for_moneyline(item["stake"], item["odds"], False, push=True)
+            else:
+                winner = item["home"] if home_score > away_score else item["away"]
+                won = item["picked_team"] == winner
+                status = "GANADA" if won else "PERDIDA"
+                profit = _profit_for_moneyline(item["stake"], item["odds"], won)
+
+            row_number = item["row_number"]
+            updates.extend([
+                {"range": f"{target_worksheet}!M{row_number}", "majorDimension": "ROWS", "values": [[status]]},
+                {"range": f"{target_worksheet}!N{row_number}:O{row_number}", "majorDimension": "ROWS", "values": [[profit, now_mx]]},
+            ])
+            settled += 1
+
+        if updates:
+            batch_url = f"https://sheets.googleapis.com/v4/spreadsheets/{target_sheet_id}/values:batchUpdate"
+            _request_json(
+                session,
+                "POST",
+                batch_url,
+                json={"valueInputOption": "USER_ENTERED", "data": updates},
+            )
+
+        return {
+            "ok": True,
+            "settled": settled,
+            "pending": still_pending,
+            "worksheet": target_worksheet,
+            "message": "settlement complete",
+            "adc_project": project_id,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "settled": 0,
+            "pending": 0,
             "worksheet": target_worksheet,
             "message": f"{type(exc).__name__}: {str(exc) or repr(exc)}"[:1000],
             "credential_type": type(credentials).__name__ if credentials is not None else "unresolved",
