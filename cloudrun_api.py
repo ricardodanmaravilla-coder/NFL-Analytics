@@ -13,10 +13,11 @@ from fastapi.responses import HTMLResponse
 
 from modules.nfl_calibration import empirical_residual_two_way, historico_antes, primary_with_agreement
 from modules.nfl_elo_engine import MotorELONFL
+from modules.nfl_google_sheets import sync_bets
 from modules.nfl_moneyline_runtime import MoneylineRuntime
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 
-app = FastAPI(title="NFL Analytics API", version="3.1")
+app = FastAPI(title="NFL Analytics API", version="3.2")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
@@ -130,7 +131,7 @@ def get_models(season, week):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "NFL Analytics Cloud Run", "version": "3.1"}
+    return {"status": "ok", "service": "NFL Analytics Cloud Run", "version": "3.2"}
 
 
 @app.get("/api/scan/{season}/{week}")
@@ -182,6 +183,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         picks = sorted(picks, key=lambda x: x["score"], reverse=True)
         bets = [p for p in picks if p["action"] == "BET"]
         leans = [p for p in picks if p["action"] == "LEAN"]
+        sheet_sync = sync_bets(bets, season, week, bankroll)
         return {
             "season": season,
             "week": week,
@@ -190,6 +192,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
             "bets": bets,
             "leans": leans,
             "diagnostics": diagnostics,
+            "sheet_sync": sheet_sync,
         }
     except HTTPException:
         raise
@@ -199,4 +202,4 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    return """<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'><title>NFL Analytics</title><style>body{font-family:Arial;max-width:900px;margin:40px auto;padding:0 18px;background:#0b1020;color:#fff}input,button{padding:12px;margin:6px;border-radius:8px;border:0}button{cursor:pointer;font-weight:700}.card{background:#151d33;padding:18px;border-radius:12px;margin-top:15px}.muted{color:#aeb8d0;font-size:.92rem}.stake{margin-top:8px;font-weight:700}.lean{border:1px solid #59647d}details{margin-top:18px}summary{cursor:pointer;font-weight:700}</style></head><body><h1>🏈 NFL Analytics</h1><p>Cloud Run + FastAPI</p><input id='s' type='number' value='2026' min='2021' max='2030'><input id='w' type='number' value='1' min='1' max='22'><input id='b' type='number' value='5000' min='100' step='500'><button onclick='go()'>Escanear jornada</button><div id='out' class='card'>Listo.</div><script>function money(v){return Number(v||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})}function card(p,autoBet){const cap=p.kelly_capped?' · tope 5% aplicado':'';const stake=autoBet?`<div class="stake">Kelly 1/4: ${p.kelly}% · Apostar $${money(p.stake)}${cap}</div>`:`<div class="stake">Kelly 1/4 teórico: ${p.kelly}% · Apostar $0.00</div><div class="muted">LEAN — NO AUTO BET</div>`;return `<div class="card ${autoBet?'':'lean'}"><b>${p.pick}</b><br><span class="muted">${p.game}</span><br>Prob ${p.probability}% · Edge ${p.edge} pp · EV ${p.ev}% · Momio ${p.odds}${stake}</div>`}async function go(){const o=document.getElementById('out');o.innerHTML='Analizando...';try{const r=await fetch(`/api/scan/${s.value}/${w.value}?bankroll=${encodeURIComponent(b.value)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Error');let h=`<h2>Recomendaciones</h2><div class="muted">Bankroll $${money(j.bankroll)} · ${j.kelly_policy}</div>`;if(j.bets.length===0)h+='<p>No hay BET robusto.</p>';for(const p of j.bets)h+=card(p,true);if(j.leans.length){h+=`<details><summary>LEAN (${j.leans.length}) — señales secundarias</summary>`;for(const p of j.leans)h+=card(p,false);h+='</details>'}o.innerHTML=h}catch(e){o.innerHTML='<b>Error:</b> '+e.message}}</script></body></html>"""
+    return """<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'><title>NFL Analytics</title><style>body{font-family:Arial;max-width:900px;margin:40px auto;padding:0 18px;background:#0b1020;color:#fff}input,button{padding:12px;margin:6px;border-radius:8px;border:0}button{cursor:pointer;font-weight:700}.card{background:#151d33;padding:18px;border-radius:12px;margin-top:15px}.muted{color:#aeb8d0;font-size:.92rem}.stake{margin-top:8px;font-weight:700}.lean{border:1px solid #59647d}details{margin-top:18px}summary{cursor:pointer;font-weight:700}</style></head><body><h1>🏈 NFL Analytics</h1><p>Cloud Run + FastAPI</p><input id='s' type='number' value='2026' min='2021' max='2030'><input id='w' type='number' value='1' min='1' max='22'><input id='b' type='number' value='5000' min='100' step='500'><button onclick='go()'>Escanear jornada</button><div id='out' class='card'>Listo.</div><script>function money(v){return Number(v||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})}function card(p,autoBet){const cap=p.kelly_capped?' · tope 5% aplicado':'';const stake=autoBet?`<div class="stake">Kelly 1/4: ${p.kelly}% · Apostar $${money(p.stake)}${cap}</div>`:`<div class="stake">Kelly 1/4 teórico: ${p.kelly}% · Apostar $0.00</div><div class="muted">LEAN — NO AUTO BET</div>`;return `<div class="card ${autoBet?'':'lean'}"><b>${p.pick}</b><br><span class="muted">${p.game}</span><br>Prob ${p.probability}% · Edge ${p.edge} pp · EV ${p.ev}% · Momio ${p.odds}${stake}</div>`}async function go(){const o=document.getElementById('out');o.innerHTML='Analizando...';try{const r=await fetch(`/api/scan/${s.value}/${w.value}?bankroll=${encodeURIComponent(b.value)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Error');let h=`<h2>Recomendaciones</h2><div class="muted">Bankroll $${money(j.bankroll)} · ${j.kelly_policy}</div>`;const ss=j.sheet_sync||{};h+=ss.ok?`<div class="muted">Sheet NFL_Picks: ${ss.inserted||0} nuevas · ${ss.updated||0} actualizadas</div>`:`<div class="muted">Sheet NFL_Picks: no guardó · ${ss.message||'error'}</div>`;if(j.bets.length===0)h+='<p>No hay BET robusto.</p>';for(const p of j.bets)h+=card(p,true);if(j.leans.length){h+=`<details><summary>LEAN (${j.leans.length}) — señales secundarias</summary>`;for(const p of j.leans)h+=card(p,false);h+='</details>'}o.innerHTML=h}catch(e){o.innerHTML='<b>Error:</b> '+e.message}}</script></body></html>"""
