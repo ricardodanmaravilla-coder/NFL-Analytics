@@ -1,0 +1,9 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+pandas
+numpy
+requests
+nfl_data_py
+scikit-learn
+pyarrow
+duckdb
