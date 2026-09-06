@@ -63,11 +63,11 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git pull origin main --rebase
           git add data/historico_nfl_games.csv \
                   data/historico_nfl_qbs.csv \
                   data/historico_nfl_pbp_team_game.csv \
                   data/parquet/pbp_team_game
           git commit -m "🏈 Automatización: NFL PBP CSV + Parquet actualizados" || echo "Sin cambios nuevos para guardar"
+          git fetch origin main
+          git rebase origin/main
           git push origin main
