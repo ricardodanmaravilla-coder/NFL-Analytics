@@ -17,6 +17,7 @@ from modules.nfl_calibration import historico_antes
 from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_moneyline_runtime import MoneylineRuntime
 from modules.nfl_production_history import load_production_history
+from modules.nfl_therundown_odds import diagnose_date
 
 HISTORY_TTL_SECONDS = max(900, int(os.getenv("NFL_HISTORY_TTL_SECONDS", "3600")))
 _CACHE_LOCK = threading.Lock()
@@ -88,3 +89,9 @@ def storage_status():
         "pbp_rows": int(len(pbp)),
         "seasons": seasons,
     }
+
+
+@app.get("/api/odds/diagnostics/{gameday}")
+def odds_diagnostics(gameday: str):
+    """Inspect TheRundown availability without ever exposing the API key."""
+    return diagnose_date(gameday)
