@@ -23,11 +23,31 @@ jobs:
       - name: DuckDB selective read smoke test
         run: |
           python - <<'PY'
-          from modules.nfl_bigdata_store import leer_pbp_parquet
+          from modules.nfl_bigdata_store import detectar_storage_pbp, leer_pbp_parquet
+          assert detectar_storage_pbp() == 'PARQUET'
           df = leer_pbp_parquet(seasons=[2024, 2025])
           assert not df.empty
           assert set(df['season'].astype(int).unique()).issubset({2024, 2025})
           print(df.shape)
+          PY
+      - name: Production Moneyline auto-loads Parquet without look-ahead
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from modules.nfl_calibration import historico_antes
+          from modules.nfl_moneyline_runtime import MoneylineRuntime
+
+          games = pd.read_csv('data/historico_nfl_games.csv')
+          past = historico_antes(games, 2025, 10)
+          allowed = set(past['game_id'].dropna().astype(str))
+          runtime = MoneylineRuntime()
+          pbp = runtime._pbp_seguro_para_games(past, pd.DataFrame())
+          assert not pbp.empty
+          assert set(pbp['game_id'].dropna().astype(str)).issubset(allowed)
+          assert not ((pd.to_numeric(pbp['season']) > 2025) | ((pd.to_numeric(pbp['season']) == 2025) & (pd.to_numeric(pbp['week']) >= 10))).any()
+          assert runtime.entrenar(past, pd.DataFrame())
+          assert runtime.usa_pbp is True
+          print({'pbp_rows': len(pbp), 'usa_pbp': runtime.usa_pbp})
           PY
       - name: Existing PBP backtest smoke test
         run: python backtest_nfl_pbp_v1.py
