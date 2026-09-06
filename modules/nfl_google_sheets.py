@@ -64,15 +64,21 @@ def sync_bets(
     sheet_id: str | None = None,
     worksheet: str | None = None,
 ):
-    """Insert/update NFL BET recommendations using the Google Sheets REST API."""
+    """Insert new NFL BET recommendations without rewriting prior snapshots.
+
+    A recommendation is immutable once its deterministic ID exists in the Sheet.
+    Re-scanning the same game/pick therefore cannot replace its original timestamp,
+    probability, price, edge, EV, Kelly or stake. Only ``settle_pending`` may later
+    change Resultado/Profit/Fecha cierre.
+    """
     rows = [dict(x) for x in (bets or [])]
     if not rows:
-        return {"ok": True, "inserted": 0, "updated": 0, "message": "no bets"}
+        return {"ok": True, "inserted": 0, "updated": 0, "skipped_existing": 0, "message": "no bets"}
 
     target_sheet_id = (sheet_id or SHEET_ID).strip()
     target_worksheet = (worksheet or WORKSHEET).strip() or "NFL_Picks"
     if not target_sheet_id:
-        return {"ok": False, "inserted": 0, "updated": 0, "message": "sheet id missing"}
+        return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0, "message": "sheet id missing"}
 
     credentials = None
     project_id = None
@@ -100,28 +106,29 @@ def sync_bets(
                 "ok": False,
                 "inserted": 0,
                 "updated": 0,
+                "skipped_existing": 0,
                 "worksheet": target_worksheet,
                 "message": "header mismatch; existing sheet preserved",
             }
 
-        id_to_row = {}
-        for idx, existing in enumerate(values[1:], start=2):
-            if len(existing) >= 16 and existing[15]:
-                id_to_row[existing[15]] = idx
+        existing_ids = {
+            existing[15]
+            for existing in values[1:]
+            if len(existing) >= 16 and existing[15]
+        }
 
         now_mx = datetime.now(ZoneInfo("America/Mexico_City")).strftime("%Y-%m-%d %H:%M:%S")
         append_payload = []
-        updates = []
+        skipped_existing = 0
+        seen_this_scan = set()
 
         for bet in rows:
             rec_id = _record_id(season, week, bet)
-            existing_row_number = id_to_row.get(rec_id)
-            previous = values[existing_row_number - 1] if existing_row_number else []
-            previous_result = previous[12] if len(previous) > 12 and previous[12] else "PENDIENTE"
-            previous_profit = previous[13] if len(previous) > 13 else ""
-            previous_close = previous[14] if len(previous) > 14 else ""
-
-            payload = [
+            if rec_id in existing_ids or rec_id in seen_this_scan:
+                skipped_existing += 1
+                continue
+            seen_this_scan.add(rec_id)
+            append_payload.append([
                 now_mx,
                 int(season),
                 int(week),
@@ -134,29 +141,11 @@ def sync_bets(
                 bet.get("kelly", ""),
                 bet.get("stake", ""),
                 "BET",
-                previous_result,
-                previous_profit,
-                previous_close,
+                "PENDIENTE",
+                "",
+                "",
                 rec_id,
-            ]
-
-            if existing_row_number:
-                updates.append({
-                    "range": f"{target_worksheet}!A{existing_row_number}:P{existing_row_number}",
-                    "majorDimension": "ROWS",
-                    "values": [payload],
-                })
-            else:
-                append_payload.append(payload)
-
-        if updates:
-            batch_url = f"https://sheets.googleapis.com/v4/spreadsheets/{target_sheet_id}/values:batchUpdate"
-            _request_json(
-                session,
-                "POST",
-                batch_url,
-                json={"valueInputOption": "USER_ENTERED", "data": updates},
-            )
+            ])
 
         if append_payload:
             append_range = quote(f"{target_worksheet}!A:P", safe="")
@@ -171,9 +160,10 @@ def sync_bets(
         return {
             "ok": True,
             "inserted": len(append_payload),
-            "updated": len(updates),
+            "updated": 0,
+            "skipped_existing": skipped_existing,
             "worksheet": target_worksheet,
-            "message": "saved via Sheets API",
+            "message": "saved via Sheets API; existing pick snapshots preserved",
             "credential_type": type(credentials).__name__,
             "service_account_email": service_account_email,
             "adc_project": project_id,
@@ -183,6 +173,7 @@ def sync_bets(
             "ok": False,
             "inserted": 0,
             "updated": 0,
+            "skipped_existing": 0,
             "worksheet": target_worksheet,
             "message": f"{type(exc).__name__}: {str(exc) or repr(exc)}"[:1000],
             "credential_type": type(credentials).__name__ if credentials is not None else "unresolved",
