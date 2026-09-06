@@ -1,0 +1,31 @@
+name: NFL TheRundown Validation
+
+on:
+  pull_request:
+    paths:
+      - 'modules/nfl_therundown_odds.py'
+      - 'cloudrun_api.py'
+      - 'test_nfl_therundown_odds.py'
+      - '.github/workflows/nfl-therundown-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime test dependencies
+        run: pip install requests pytest
+      - name: Compile provider and Cloud Run API
+        run: python -m py_compile modules/nfl_therundown_odds.py cloudrun_api.py test_nfl_therundown_odds.py
+      - name: Run provider regression tests
+        run: pytest -q test_nfl_therundown_odds.py
+      - name: Guard live-price policy
+        run: |
+          grep -q 'get_moneyline(home, away' cloudrun_api.py
+          grep -q 'NO BET - sin Moneyline real de TheRundown' cloudrun_api.py
+          grep -q 'simular_nfl_montecarlo(home, away, past_games, None, None)' cloudrun_api.py
+          ! grep -q 'hm, am = num(g.get("home_moneyline"))' cloudrun_api.py
