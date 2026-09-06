@@ -79,3 +79,16 @@ base.PBP_STORAGE = "UNINITIALIZED"
 base.HISTORY_TTL_SECONDS = HISTORY_TTL_SECONDS
 
 app = base.app
+
+
+@app.get("/api/storage")
+def storage_status():
+    games, pbp = load_history_parquet_first()
+    seasons = sorted(pd.to_numeric(games["season"], errors="coerce").dropna().astype(int).unique().tolist())
+    return {
+        "history_source": base.PBP_STORAGE,
+        "history_ttl_seconds": HISTORY_TTL_SECONDS,
+        "games_rows": int(len(games)),
+        "pbp_rows": int(len(pbp)),
+        "seasons": seasons,
+    }
