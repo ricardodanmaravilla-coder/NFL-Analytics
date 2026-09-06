@@ -1,0 +1,19 @@
+name: NFL Sheet Immutability
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-cloudrun.txt pytest
+      - name: Compile Sheets module
+        run: python -m py_compile modules/nfl_google_sheets.py test_nfl_sheet_immutability.py
+      - name: Snapshot immutability regression
+        run: pytest -q test_nfl_sheet_immutability.py
