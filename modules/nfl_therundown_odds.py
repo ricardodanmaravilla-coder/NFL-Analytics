@@ -15,6 +15,7 @@ import requests
 NFL_SPORT_ID = 2
 CACHE_TTL_SECONDS = 300
 _CACHE = {}
+DEFAULT_AFFILIATE_IDS = "19,22,23,3,2,6,4,11,12,21,24"
 AFFILIATE_NAMES = {
     "2": "Bovada", "3": "Pinnacle", "4": "SportsBetting", "6": "BetOnline",
     "11": "LowVig", "12": "Bodog", "16": "Matchbook", "19": "DraftKings",
@@ -45,10 +46,15 @@ def configured():
     return bool(os.getenv("THERUNDOWN_KEY", "").strip())
 
 
+def _priority():
+    affiliate_ids = os.getenv("THERUNDOWN_AFFILIATE_IDS", DEFAULT_AFFILIATE_IDS)
+    return [x.strip() for x in affiliate_ids.split(",") if x.strip()]
+
+
 def _price(value):
     try:
         x = float(value)
-        if abs(x) < 100:
+        if x == 0.0001 or abs(x) < 100:
             return None
         return int(round(x))
     except (TypeError, ValueError):
@@ -86,24 +92,31 @@ def _team_pair(event):
     return _norm_team(away.get("abbreviation") or away.get("name")), _norm_team(home.get("abbreviation") or home.get("name"))
 
 
-def fetch_moneylines(gameday, get_fn=requests.get):
-    """Return {(away,home): quote} for one NFL slate date."""
+def _request_snapshot(gameday, get_fn=requests.get):
     key = os.getenv("THERUNDOWN_KEY", "").strip()
     if not key:
-        return {}
+        return None, _priority(), str(gameday)[:10]
     date = str(gameday)[:10]
-    now = time.monotonic()
-    cached = _CACHE.get(date)
-    if cached and now - cached[0] < CACHE_TTL_SECONDS:
-        return dict(cached[1])
-    affiliate_ids = os.getenv("THERUNDOWN_AFFILIATE_IDS", "19,22,23")
-    priority = [x.strip() for x in affiliate_ids.split(",") if x.strip()]
+    priority = _priority()
+    affiliate_ids = ",".join(priority)
     url = f"https://therundown.io/api/v2/sports/{NFL_SPORT_ID}/events/{date}"
-    params = {"market_ids":"1", "affiliate_ids":affiliate_ids, "main_line":"true", "hide_closed":"true", "offset":"300"}
-    response = get_fn(url, params=params, headers={"X-TheRundown-Key":key, "Accept":"application/json"}, timeout=12)
-    if getattr(response, "status_code", 0) != 200:
-        return {}
-    payload = response.json()
+    params = {
+        "market_ids": "1",
+        "affiliate_ids": affiliate_ids,
+        "main_line": "true",
+        "hide_closed": "true",
+        "offset": "300",
+    }
+    response = get_fn(
+        url,
+        params=params,
+        headers={"X-TheRundown-Key": key, "Accept": "application/json"},
+        timeout=12,
+    )
+    return response, priority, date
+
+
+def _extract_quotes(payload, priority):
     events = payload.get("events", []) if isinstance(payload, dict) else []
     out = {}
     fetched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -129,6 +142,8 @@ def fetch_moneylines(gameday, get_fn=requests.get):
                 if isinstance(lines, dict):
                     lines = [lines]
                 for line in lines:
+                    if not isinstance(line, dict):
+                        continue
                     prices = line.get("prices") or {}
                     if not isinstance(prices, dict):
                         continue
@@ -137,6 +152,8 @@ def fetch_moneylines(gameday, get_fn=requests.get):
                             continue
                         pobj = _latest_price_obj(prices[aid])
                         if pobj.get("is_main_line") is False:
+                            continue
+                        if pobj.get("closed_at") not in (None, ""):
                             continue
                         p = _price(pobj.get("price", pobj.get("odds")))
                         if p is not None:
@@ -151,8 +168,102 @@ def fetch_moneylines(gameday, get_fn=requests.get):
                 "source": "TheRundown",
                 "fetched_at": fetched_at,
             }
+    return out
+
+
+def fetch_moneylines(gameday, get_fn=requests.get):
+    """Return {(away,home): quote} for one NFL slate date."""
+    if not configured():
+        return {}
+    date = str(gameday)[:10]
+    now = time.monotonic()
+    cached = _CACHE.get(date)
+    if cached and now - cached[0] < CACHE_TTL_SECONDS:
+        return dict(cached[1])
+    response, priority, _ = _request_snapshot(gameday, get_fn=get_fn)
+    if response is None or getattr(response, "status_code", 0) != 200:
+        return {}
+    try:
+        payload = response.json()
+    except Exception:
+        return {}
+    out = _extract_quotes(payload, priority)
     _CACHE[date] = (now, out)
     return dict(out)
+
+
+def diagnose_date(gameday, get_fn=requests.get):
+    """Safe production diagnostic. Never returns or echoes the API key."""
+    date = str(gameday)[:10]
+    result = {
+        "configured": configured(),
+        "sport_id": NFL_SPORT_ID,
+        "date": date,
+        "market_id": 1,
+        "affiliate_priority": _priority(),
+    }
+    if not configured():
+        result.update({"ok": False, "reason": "THERUNDOWN_KEY_NOT_CONFIGURED"})
+        return result
+    try:
+        response, priority, _ = _request_snapshot(gameday, get_fn=get_fn)
+        status = int(getattr(response, "status_code", 0) or 0)
+        result["http_status"] = status
+        headers = getattr(response, "headers", {}) or {}
+        result["datapoints"] = headers.get("X-Datapoints") or headers.get("x-datapoints")
+        if status != 200:
+            result.update({"ok": False, "reason": f"HTTP_{status}"})
+            return result
+        payload = response.json()
+        events = payload.get("events", []) if isinstance(payload, dict) else []
+        offered = set()
+        moneyline_markets = 0
+        event_rows = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            away, home = _team_pair(event)
+            books_for_event = set()
+            for market in event.get("markets") or []:
+                if not isinstance(market, dict) or int(market.get("market_id") or 0) != 1:
+                    continue
+                if market.get("period_id") not in (None, "", 0, "0"):
+                    continue
+                moneyline_markets += 1
+                for participant in market.get("participants") or []:
+                    for line in participant.get("lines") or []:
+                        if not isinstance(line, dict):
+                            continue
+                        prices = line.get("prices") or {}
+                        if isinstance(prices, dict):
+                            books_for_event.update(str(x) for x in prices.keys())
+            offered.update(books_for_event)
+            event_rows.append({
+                "game": f"{away} @ {home}" if away and home else str(event.get("event_id") or "unknown"),
+                "affiliate_ids": sorted(books_for_event),
+            })
+        quotes = _extract_quotes(payload, priority)
+        result.update({
+            "ok": True,
+            "events": len(events),
+            "moneyline_markets": moneyline_markets,
+            "complete_moneyline_quotes": len(quotes),
+            "offered_affiliate_ids": sorted(offered),
+            "offered_books": [AFFILIATE_NAMES.get(aid, f"TheRundown {aid}") for aid in sorted(offered)],
+            "games": event_rows,
+        })
+        if not events:
+            result["reason"] = "NO_EVENTS_FOR_DATE"
+        elif moneyline_markets == 0:
+            result["reason"] = "NO_MONEYLINE_MARKET"
+        elif not quotes:
+            result["reason"] = "NO_COMPLETE_TWO_SIDED_MONEYLINE"
+        else:
+            result["reason"] = "OK"
+        return result
+    except Exception as exc:
+        result.update({"ok": False, "reason": f"{type(exc).__name__}"})
+        return result
 
 
 def get_moneyline(home, away, gameday, get_fn=requests.get):
