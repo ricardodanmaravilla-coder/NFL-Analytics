@@ -19,11 +19,12 @@ from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 from modules.nfl_therundown_odds import configured as therundown_configured, get_moneyline
 from modules.nfl_weather import forecast_kickoff
 
-app = FastAPI(title="NFL Analytics API", version="3.5")
+app = FastAPI(title="NFL Analytics API", version="3.6")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
 MAX_STAKE_FRACTION = 0.05
+MIN_PROBABILITY = 56.0
 
 
 def num(v):
@@ -88,7 +89,7 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
     ev = ((p / 100) * dec - 1) * 100
     probs = [float(p)] + [float(x) for x in support_probs if x is not None]
     disagreement = max(probs) - min(probs)
-    if p < 54 or edge < 3 or ev < 3:
+    if p < MIN_PROBABILITY or edge < 3 or ev < 3:
         return None
     is_bet = odd < 0
     kelly_pct, stake, kelly_capped = kelly_stake(p, odd, bankroll)
@@ -140,10 +141,11 @@ def health():
     return {
         "status": "ok",
         "service": "NFL Analytics Cloud Run",
-        "version": "3.5",
+        "version": "3.6",
         "kickoff_weather": True,
         "live_odds_provider": "TheRundown",
         "therundown_configured": therundown_configured(),
+        "min_probability": MIN_PROBABILITY,
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
 
@@ -197,8 +199,6 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
                     home, g.get("gameday"), g.get("gametime"), g.get("roof")
                 )
                 pred = ml.predecir_contexto(week, home, away, temp, wind, dome, hr, ar)
-                # Moneyline support does not need a current spread/total. Avoid feeding
-                # schedule-carried market lines into a live recommendation.
                 emp = simular_nfl_montecarlo(home, away, past_games, None, None)
                 if not pred or not emp.get("Disponible"):
                     diagnostics.append({
@@ -244,6 +244,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
             "season": season,
             "week": week,
             "bankroll": round(bankroll, 2),
+            "min_probability": MIN_PROBABILITY,
             "kelly_policy": "1/4 Kelly, máximo 5% del bankroll por BET",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
             "bets": bets,
@@ -260,4 +261,4 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    return """<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'><title>NFL Analytics</title><style>body{font-family:Arial;max-width:900px;margin:40px auto;padding:0 18px;background:#0b1020;color:#fff}input,button{padding:12px;margin:6px;border-radius:8px;border:0}button{cursor:pointer;font-weight:700}.card{background:#151d33;padding:18px;border-radius:12px;margin-top:15px}.muted{color:#aeb8d0;font-size:.92rem}.stake{margin-top:8px;font-weight:700}.lean{border:1px solid #59647d}details{margin-top:18px}summary{cursor:pointer;font-weight:700}</style></head><body><h1>🏈 NFL Analytics</h1><p>Cloud Run + FastAPI</p><input id='s' type='number' value='2026' min='2021' max='2030'><input id='w' type='number' value='1' min='1' max='22'><input id='b' type='number' value='5000' min='100' step='500'><button onclick='go()'>Escanear jornada</button><button onclick='settleNow()'>Actualizar resultados</button><div id='out' class='card'>Listo.</div><script>function money(v){return Number(v||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})}function card(p,autoBet){const cap=p.kelly_capped?' · tope 5% aplicado':'';const src=p.book?` · ${p.book}`:'';const stake=autoBet?`<div class="stake">Kelly 1/4: ${p.kelly}% · Apostar $${money(p.stake)}${cap}</div>`:`<div class="stake">Kelly 1/4 teórico: ${p.kelly}% · Apostar $0.00</div><div class="muted">LEAN — NO AUTO BET</div>`;return `<div class="card ${autoBet?'':'lean'}"><b>${p.pick}</b><br><span class="muted">${p.game}</span><br>Prob ${p.probability}% · Edge ${p.edge} pp · EV ${p.ev}% · Momio ${p.odds}${src}${stake}</div>`}function settleText(st){if(!st)return '';return st.ok?`<div class="muted">Resultados: ${st.settled||0} liquidados · ${st.pending||0} pendientes</div>`:`<div class="muted">Resultados: error · ${st.message||'desconocido'}</div>`}async function settleNow(){const o=document.getElementById('out');o.innerHTML='Actualizando resultados...';try{const r=await fetch('/api/settle');const j=await r.json();if(!r.ok)throw new Error(j.detail||'Error');o.innerHTML=`<h2>Resultados NFL</h2>${settleText(j)}<div class="muted">GANADA/PERDIDA/PUSH y Profit $ se actualizan en NFL_Picks.</div>`}catch(e){o.innerHTML='<b>Error:</b> '+e.message}}async function go(){const o=document.getElementById('out');o.innerHTML='Analizando...';try{const r=await fetch(`/api/scan/${s.value}/${w.value}?bankroll=${encodeURIComponent(b.value)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Error');let h=`<h2>Recomendaciones</h2><div class="muted">Bankroll $${money(j.bankroll)} · ${j.kelly_policy}</div><div class="muted">Cuotas actuales: TheRundown</div>`;const ss=j.sheet_sync||{};h+=ss.ok?`<div class="muted">Sheet NFL_Picks: ${ss.inserted||0} nuevas · ${ss.updated||0} actualizadas</div>`:`<div class="muted">Sheet NFL_Picks: no guardó · ${ss.message||'error'}</div>`;h+=settleText(j.settlement);if(j.bets.length===0)h+='<p>No hay BET robusto.</p>';for(const p of j.bets)h+=card(p,true);if(j.leans.length){h+=`<details><summary>LEAN (${j.leans.length}) — señales secundarias</summary>`;for(const p of j.leans)h+=card(p,false);h+='</details>'}o.innerHTML=h}catch(e){o.innerHTML='<b>Error:</b> '+e.message}}</script></body></html>"""
+    return """<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'><title>NFL Analytics</title><style>body{font-family:Arial;max-width:900px;margin:40px auto;padding:0 18px;background:#0b1020;color:#fff}input,button{padding:12px;margin:6px;border-radius:8px;border:0}button{cursor:pointer;font-weight:700}.card{background:#151d33;padding:18px;border-radius:12px;margin-top:15px}.muted{color:#aeb8d0;font-size:.92rem}.stake{margin-top:8px;font-weight:700}.lean{border:1px solid #59647d}details{margin-top:18px}summary{cursor:pointer;font-weight:700}</style></head><body><h1>🏈 NFL Analytics</h1><p>Cloud Run + FastAPI</p><input id='s' type='number' value='2026' min='2021' max='2030'><input id='w' type='number' value='1' min='1' max='22'><input id='b' type='number' value='5000' min='100' step='500'><button onclick='go()'>Escanear jornada</button><button onclick='settleNow()'>Actualizar resultados</button><div id='out' class='card'>Listo.</div><script>function money(v){return Number(v||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})}function card(p,autoBet){const cap=p.kelly_capped?' · tope 5% aplicado':'';const src=p.book?` · ${p.book}`:'';const stake=autoBet?`<div class="stake">Kelly 1/4: ${p.kelly}% · Apostar $${money(p.stake)}${cap}</div>`:`<div class="stake">Kelly 1/4 teórico: ${p.kelly}% · Apostar $0.00</div><div class="muted">LEAN — NO AUTO BET</div>`;return `<div class="card ${autoBet?'':'lean'}"><b>${p.pick}</b><br><span class="muted">${p.game}</span><br>Prob ${p.probability}% · Edge ${p.edge} pp · EV ${p.ev}% · Momio ${p.odds}${src}${stake}</div>`}function settleText(st){if(!st)return '';return st.ok?`<div class="muted">Resultados: ${st.settled||0} liquidados · ${st.pending||0} pendientes</div>`:`<div class="muted">Resultados: error · ${st.message||'desconocido'}</div>`}async function settleNow(){const o=document.getElementById('out');o.innerHTML='Actualizando resultados...';try{const r=await fetch('/api/settle');const j=await r.json();if(!r.ok)throw new Error(j.detail||'Error');o.innerHTML=`<h2>Resultados NFL</h2>${settleText(j)}<div class="muted">GANADA/PERDIDA/PUSH y Profit $ se actualizan en NFL_Picks.</div>`}catch(e){o.innerHTML='<b>Error:</b> '+e.message}}async function go(){const o=document.getElementById('out');o.innerHTML='Analizando...';try{const r=await fetch(`/api/scan/${s.value}/${w.value}?bankroll=${encodeURIComponent(b.value)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Error');let h=`<h2>Recomendaciones</h2><div class="muted">Bankroll $${money(j.bankroll)} · mínimo ${j.min_probability}% · ${j.kelly_policy}</div><div class="muted">Cuotas actuales: TheRundown</div>`;const ss=j.sheet_sync||{};h+=ss.ok?`<div class="muted">Sheet NFL_Picks: ${ss.inserted||0} nuevas · ${ss.updated||0} actualizadas</div>`:`<div class="muted">Sheet NFL_Picks: no guardó · ${ss.message||'error'}</div>`;h+=settleText(j.settlement);if(j.bets.length===0)h+='<p>No hay BET robusto.</p>';for(const p of j.bets)h+=card(p,true);if(j.leans.length){h+=`<details><summary>LEAN (${j.leans.length}) — señales secundarias</summary>`;for(const p of j.leans)h+=card(p,false);h+='</details>'}o.innerHTML=h}catch(e){o.innerHTML='<b>Error:</b> '+e.message}}</script></body></html>"""
