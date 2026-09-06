@@ -89,14 +89,31 @@ def leer_pbp_parquet(parquet_dir=DEFAULT_PBP_PARQUET, seasons=None):
         con.close()
 
 
-def cargar_pbp_preferente(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PBP_PARQUET, seasons=None):
+def detectar_storage_pbp(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PBP_PARQUET):
     parquet_dir = Path(parquet_dir)
+    csv_path = Path(csv_path)
     if parquet_dir.exists() and any(parquet_dir.rglob("*.parquet")):
+        return "PARQUET"
+    if csv_path.exists():
+        return "CSV"
+    return "NO_DISPONIBLE"
+
+
+def cargar_pbp_preferente(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PBP_PARQUET, seasons=None):
+    """Carga PBP agregado prefiriendo Parquet y usando CSV sólo como fallback.
+
+    Si ninguno de los dos existe devuelve un DataFrame vacío para que producción
+    pueda degradar explícitamente a un modelo sin PBP en lugar de fallar al arrancar.
+    """
+    storage = detectar_storage_pbp(csv_path=csv_path, parquet_dir=parquet_dir)
+    if storage == "PARQUET":
         return leer_pbp_parquet(parquet_dir, seasons=seasons)
-    df = pd.read_csv(csv_path)
-    if seasons is not None:
-        df = df[pd.to_numeric(df["season"], errors="coerce").isin([int(s) for s in seasons])]
-    return df
+    if storage == "CSV":
+        df = pd.read_csv(csv_path)
+        if seasons is not None:
+            df = df[pd.to_numeric(df["season"], errors="coerce").isin([int(s) for s in seasons])]
+        return df
+    return pd.DataFrame()
 
 
 def validar_paridad_csv_parquet(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PBP_PARQUET, rtol=1e-6, atol=1e-8):
@@ -123,8 +140,6 @@ def validar_paridad_csv_parquet(csv_path=DEFAULT_PBP_CSV, parquet_dir=DEFAULT_PB
             continue
         a = pd.to_numeric(csv[c], errors="coerce")
         b = pd.to_numeric(pq[c], errors="coerce")
-        # Sólo tratamos como numérica una columna cuando ambos lados son realmente
-        # numéricos (ignorando nulos). Las demás se comparan como texto abajo.
         if a.notna().sum() == csv[c].notna().sum() and b.notna().sum() == pq[c].notna().sum():
             av = a.to_numpy(dtype=float)
             bv = b.to_numpy(dtype=float)
