@@ -1,0 +1,25 @@
+name: NFL Portfolio Risk Validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  portfolio-risk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Refresh schedule
+        run: python descargar_historico_nfl.py
+      - name: Refresh PBP
+        run: python descargar_pbp_nfl.py
+      - name: Compile
+        run: python -m py_compile backtest_nfl_portfolio_risk.py
+      - name: Strict weekly portfolio walk-forward
+        run: python backtest_nfl_portfolio_risk.py
