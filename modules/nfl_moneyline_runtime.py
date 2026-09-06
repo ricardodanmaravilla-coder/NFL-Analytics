@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 
+from modules.nfl_bigdata_store import cargar_pbp_preferente
 from modules.nfl_ml_engine import PredictorNFL_ML
 from modules.nfl_pbp_engine import features_pbp_actuales
 
@@ -29,10 +30,26 @@ class MoneylineRuntime:
         self.usa_pbp = False
         self.is_trained = False
 
+    @staticmethod
+    def _pbp_seguro_para_games(df_games, df_pbp_team_game=None):
+        """Obtiene PBP sólo para partidos ya presentes en el histórico permitido.
+
+        Si la capa web no cargó PBP, intenta Parquet/CSV automáticamente. El filtrado
+        por game_id impide que esa autocarga introduzca partidos futuros al entrenamiento.
+        """
+        pbp = df_pbp_team_game.copy() if df_pbp_team_game is not None else pd.DataFrame()
+        if pbp.empty:
+            try:
+                pbp = cargar_pbp_preferente()
+            except Exception:
+                pbp = pd.DataFrame()
+        if pbp.empty or df_games is None or df_games.empty or "game_id" not in df_games.columns or "game_id" not in pbp.columns:
+            return pbp
+        allowed_ids = set(df_games["game_id"].dropna().astype(str))
+        return pbp[pbp["game_id"].astype(str).isin(allowed_ids)].copy()
+
     def entrenar(self, df_games, df_pbp_team_game=None):
-        self.pbp_team_game = (
-            df_pbp_team_game.copy() if df_pbp_team_game is not None else pd.DataFrame()
-        )
+        self.pbp_team_game = self._pbp_seguro_para_games(df_games, df_pbp_team_game)
         self.base.pbp_team_game = self.pbp_team_game
         df = self.base.construir_features_pregame(df_games, self.pbp_team_game)
         if len(df) < 200:
