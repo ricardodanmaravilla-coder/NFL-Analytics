@@ -1,0 +1,38 @@
+name: NFL Cloud Run Weather Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements-cloudrun.txt
+      - name: Compile Cloud Run and weather module
+        run: python -m py_compile cloudrun_api.py modules/nfl_weather.py
+      - name: Roof and missing-weather guardrails
+        run: |
+          python - <<'PY'
+          from modules.nfl_weather import forecast_kickoff, roof_is_dome
+
+          assert roof_is_dome('closed', False) is True
+          assert roof_is_dome('dome', False) is True
+          assert roof_is_dome('outdoors', True) is False
+          t, w, dome, msg = forecast_kickoff('DAL', '2026-09-10', '20:20', 'closed')
+          assert t is None and w is None and dome is True
+          assert 'Domo' in msg or 'techo' in msg
+          t, w, dome, msg = forecast_kickoff('XXX', '2026-09-10', '20:20', 'outdoors')
+          assert t is None and w is None and dome is False
+          assert 'coordenadas' in msg
+          print('weather guardrails ok')
+          PY
+      - name: Verify Cloud Run no longer forces missing weather
+        run: |
+          grep -q 'forecast_kickoff' cloudrun_api.py
+          ! grep -q 'predecir_contexto(week, home, away, None, None, False' cloudrun_api.py

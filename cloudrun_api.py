@@ -16,8 +16,9 @@ from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_google_sheets import settle_pending, sync_bets
 from modules.nfl_moneyline_runtime import MoneylineRuntime
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
+from modules.nfl_weather import forecast_kickoff
 
-app = FastAPI(title="NFL Analytics API", version="3.3")
+app = FastAPI(title="NFL Analytics API", version="3.4")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
@@ -131,7 +132,12 @@ def get_models(season, week):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "NFL Analytics Cloud Run", "version": "3.3"}
+    return {
+        "status": "ok",
+        "service": "NFL Analytics Cloud Run",
+        "version": "3.4",
+        "kickoff_weather": True,
+    }
 
 
 @app.get("/api/settle")
@@ -173,10 +179,17 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
                     diagnostics.append({"game": game, "status": "NO BET - sede neutral"})
                     continue
                 hr, ar = num(g.get("home_rest")), num(g.get("away_rest"))
-                pred = ml.predecir_contexto(week, home, away, None, None, False, hr, ar)
+                temp, wind, dome, weather_msg = forecast_kickoff(
+                    home, g.get("gameday"), g.get("gametime"), g.get("roof")
+                )
+                pred = ml.predecir_contexto(week, home, away, temp, wind, dome, hr, ar)
                 emp = simular_nfl_montecarlo(home, away, past_games, num(g.get("total_line")), num(g.get("spread_line")))
                 if not pred or not emp.get("Disponible"):
-                    diagnostics.append({"game": game, "status": "Sin datos suficientes"})
+                    diagnostics.append({
+                        "game": game,
+                        "status": "Sin datos suficientes",
+                        "weather": weather_msg,
+                    })
                     continue
                 p_h, p_a = empirical_residual_two_way(pred.get("ML_Margen_Local_Esperado"), 0.0, ml.residuales_margen)
                 e_h, e_a = two_way(emp["Moneyline"].get("Gana Local"), emp["Moneyline"].get("Gana Visita"))
@@ -187,7 +200,14 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
                     picks.append(ch)
                 if ca:
                     picks.append(ca)
-                diagnostics.append({"game": game, "status": "Analizado"})
+                diagnostics.append({
+                    "game": game,
+                    "status": "Analizado",
+                    "weather": weather_msg,
+                    "temp_f": temp,
+                    "wind_mph": wind,
+                    "dome": dome,
+                })
             except Exception as exc:
                 diagnostics.append({"game": str(g.get("game_id", "?")), "status": f"Error: {type(exc).__name__}"})
         picks = sorted(picks, key=lambda x: x["score"], reverse=True)
