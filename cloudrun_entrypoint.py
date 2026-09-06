@@ -1,28 +1,81 @@
-"""Production Cloud Run entrypoint with Parquet-first historical PBP loading.
+"""Production Cloud Run entrypoint with fresh Parquet-first history.
 
-`cloudrun_api` owns the HTTP routes and betting logic. This wrapper replaces only
-its historical-data loader before the first request is served, so production uses
-the partitioned Parquet lake when present and retains CSV as a safe fallback.
+The HTTP routes remain in `cloudrun_api`. This wrapper patches only data/model
+loading before the first request so a long-lived Cloud Run revision can consume
+new weekly history without requiring a redeploy. Remote validated Parquet is
+preferred; bundled local Parquet/CSV remains an atomic fallback.
 """
 from functools import lru_cache
+import os
+import threading
+import time
 
 import pandas as pd
 
 import cloudrun_api as base
-from modules.nfl_bigdata_store import cargar_pbp_preferente, detectar_storage_pbp
+from modules.nfl_calibration import historico_antes
+from modules.nfl_elo_engine import MotorELONFL
+from modules.nfl_moneyline_runtime import MoneylineRuntime
+from modules.nfl_production_history import load_production_history
+
+HISTORY_TTL_SECONDS = max(900, int(os.getenv("NFL_HISTORY_TTL_SECONDS", "3600")))
+_CACHE_LOCK = threading.Lock()
+_MODEL_CACHE = {}
+_LAST_BUCKET = None
 
 
-@lru_cache(maxsize=1)
-def load_history_parquet_first():
-    games = pd.read_csv("data/historico_nfl_games.csv")
-    pbp = cargar_pbp_preferente()
+def _bucket() -> int:
+    return int(time.time() // HISTORY_TTL_SECONDS)
+
+
+@lru_cache(maxsize=2)
+def _history_for_bucket(bucket: int):
+    games, pbp, source = load_production_history(prefer_remote=True)
+    base.PBP_STORAGE = source
     return games, pbp
 
 
-# Patch the module global referenced dynamically by get_models(). Importing
-# cloudrun_api does not train a model or load history, so this happens before use.
+def load_history_parquet_first():
+    games, pbp = _history_for_bucket(_bucket())
+    # Return copies because downstream temporal filters create derived frames and
+    # production should never mutate the cached canonical snapshot accidentally.
+    return games.copy(), pbp.copy()
+
+
+def get_models_fresh(season, week):
+    """Cache trained models only inside the same history freshness bucket."""
+    global _LAST_BUCKET
+    bucket = _bucket()
+    key = (int(season), int(week), bucket)
+    with _CACHE_LOCK:
+        if _LAST_BUCKET != bucket:
+            _MODEL_CACHE.clear()
+            _history_for_bucket.cache_clear()
+            _LAST_BUCKET = bucket
+        cached = _MODEL_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    games, pbp = load_history_parquet_first()
+    past_games = historico_antes(games, season, week)
+    past_pbp = historico_antes(pbp, season, week) if not pbp.empty else pd.DataFrame()
+    ml = MoneylineRuntime()
+    if not ml.entrenar(past_games, past_pbp):
+        raise RuntimeError("No hay histórico suficiente para entrenar Moneyline")
+    elo = MotorELONFL()
+    elo.actualizar_ratings(past_games)
+    result = (ml, elo, past_games)
+    with _CACHE_LOCK:
+        _MODEL_CACHE[key] = result
+    return result
+
+
+# `cloudrun_api` resolves these globals when a request runs, so patching after
+# import and before uvicorn serves traffic is deterministic.
 base.load_history = load_history_parquet_first
+base.get_models = get_models_fresh
 base.MODEL_CACHE.clear()
-base.PBP_STORAGE = detectar_storage_pbp()
+base.PBP_STORAGE = "UNINITIALIZED"
+base.HISTORY_TTL_SECONDS = HISTORY_TTL_SECONDS
 
 app = base.app
