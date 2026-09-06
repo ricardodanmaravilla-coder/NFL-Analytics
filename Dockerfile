@@ -13,4 +13,4 @@ COPY requirements-cloudrun.txt .
 RUN pip install --no-cache-dir -r requirements-cloudrun.txt
 COPY . .
 
-CMD exec uvicorn cloudrun_api:app --host 0.0.0.0 --port ${PORT} --workers 1
+CMD exec uvicorn cloudrun_entrypoint:app --host 0.0.0.0 --port ${PORT} --workers 1
