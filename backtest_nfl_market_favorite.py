@@ -28,15 +28,17 @@ def main():
         raw=raw[raw['game_type'].isin(['REG','POST','WC','DIV','CON','SB'])].copy()
     pbp=load_pbp()
     all_rows=[]
+    season_bets={}
     for season in [2023,2024,2025]:
         _,_,bets=evaluate_season(raw,pbp,season)
+        season_bets[season]=bets
         legacy=filter_legacy(bets)
         truefav=filter_true_market_favorite(bets)
         a=summarize(legacy); b=summarize(truefav)
         print('SEASON',season,'LEGACY_NEGATIVE_ODDS',a,'TRUE_MARKET_FAVORITE',b)
         all_rows.append((season,a,b))
-    legacy_all=pd.concat([filter_legacy(evaluate_season(raw,pbp,s)[2]) for s in [2023,2024,2025]],ignore_index=True)
-    true_all=pd.concat([filter_true_market_favorite(evaluate_season(raw,pbp,s)[2]) for s in [2023,2024,2025]],ignore_index=True)
+    legacy_all=pd.concat([filter_legacy(season_bets[s]) for s in [2023,2024,2025]],ignore_index=True)
+    true_all=pd.concat([filter_true_market_favorite(season_bets[s]) for s in [2023,2024,2025]],ignore_index=True)
     print('TOTAL LEGACY',summarize(legacy_all))
     print('TOTAL TRUE_MARKET_FAVORITE',summarize(true_all))
     # Selección sólo 2023/2024; 2025 sigue siendo test de supervivencia.
