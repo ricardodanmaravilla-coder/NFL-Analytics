@@ -31,16 +31,29 @@ jobs:
           assert set(df['season'].astype(int).unique()).issubset({2024, 2025})
           print(df.shape)
           PY
-      - name: Cloud Run entrypoint really prefers Parquet
+      - name: Fresh production loader has validated local Parquet fallback
+        run: |
+          python - <<'PY'
+          from modules.nfl_bigdata_store import detectar_storage_pbp
+          from modules.nfl_production_history import load_production_history
+          assert detectar_storage_pbp() == 'PARQUET'
+          games, pbp, source = load_production_history(prefer_remote=False)
+          assert not games.empty and not pbp.empty
+          assert source == 'LOCAL_PARQUET_OR_CSV_FALLBACK'
+          print({'source': source, 'games': len(games), 'pbp': len(pbp)})
+          PY
+      - name: Cloud Run uses fresh patched loader and cache
         run: |
           python - <<'PY'
           import cloudrun_api as base
           import cloudrun_entrypoint as prod
           assert base.load_history is prod.load_history_parquet_first
-          assert getattr(base, 'PBP_STORAGE', None) == 'PARQUET'
+          assert base.get_models is prod.get_models_fresh
+          assert prod.HISTORY_TTL_SECONDS >= 900
           games, pbp = base.load_history()
           assert not games.empty and not pbp.empty
-          print({'storage': base.PBP_STORAGE, 'games': len(games), 'pbp': len(pbp)})
+          assert base.PBP_STORAGE in {'REMOTE_PARQUET', 'LOCAL_PARQUET_OR_CSV_FALLBACK'}
+          print({'storage': base.PBP_STORAGE, 'ttl': prod.HISTORY_TTL_SECONDS, 'games': len(games), 'pbp': len(pbp)})
           PY
       - name: Production Moneyline auto-loads Parquet without look-ahead
         run: |
