@@ -1,0 +1,19 @@
+name: NFL Market Favorite Validation
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python descargar_historico_nfl.py
+      - run: python descargar_pbp_nfl.py
+      - run: python -m py_compile backtest_nfl_market_favorite.py
+      - run: python backtest_nfl_market_favorite.py
