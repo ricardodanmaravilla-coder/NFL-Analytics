@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -16,18 +20,63 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: pip install -r requirements.txt
+      - run: pip install -r requirements-cloudrun.txt
       - name: Compile
-        run: python -m compileall modules migrar_pbp_bigdata.py
+        run: python -m compileall modules migrar_pbp_bigdata.py cloudrun_entrypoint.py cloudrun_api.py
       - name: Build nflverse development lake 2021-2025
         run: python migrar_pbp_bigdata.py --download --start 2021 --end 2025
       - name: DuckDB selective read smoke test
         run: |
           python - <<'PY'
-          from modules.nfl_bigdata_store import leer_pbp_parquet
+          from modules.nfl_bigdata_store import detectar_storage_pbp, leer_pbp_parquet
+          assert detectar_storage_pbp() == 'PARQUET'
           df = leer_pbp_parquet(seasons=[2024, 2025])
           assert not df.empty
           assert set(df['season'].astype(int).unique()).issubset({2024, 2025})
           print(df.shape)
+          PY
+      - name: Fresh production loader has validated local Parquet fallback
+        run: |
+          python - <<'PY'
+          from modules.nfl_bigdata_store import detectar_storage_pbp
+          from modules.nfl_production_history import load_production_history
+          assert detectar_storage_pbp() == 'PARQUET'
+          games, pbp, source = load_production_history(prefer_remote=False)
+          assert not games.empty and not pbp.empty
+          assert source == 'LOCAL_PARQUET_OR_CSV_FALLBACK'
+          print({'source': source, 'games': len(games), 'pbp': len(pbp)})
+          PY
+      - name: Cloud Run uses fresh patched loader and cache
+        run: |
+          python - <<'PY'
+          import cloudrun_api as base
+          import cloudrun_entrypoint as prod
+          assert base.load_history is prod.load_history_parquet_first
+          assert base.get_models is prod.get_models_fresh
+          assert prod.HISTORY_TTL_SECONDS >= 900
+          games, pbp = base.load_history()
+          assert not games.empty and not pbp.empty
+          assert base.PBP_STORAGE in {'REMOTE_PARQUET', 'LOCAL_PARQUET_OR_CSV_FALLBACK'}
+          print({'storage': base.PBP_STORAGE, 'ttl': prod.HISTORY_TTL_SECONDS, 'games': len(games), 'pbp': len(pbp)})
+          PY
+      - name: Production Moneyline auto-loads Parquet without look-ahead
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from modules.nfl_calibration import historico_antes
+          from modules.nfl_moneyline_runtime import MoneylineRuntime
+
+          games = pd.read_csv('data/historico_nfl_games.csv')
+          past = historico_antes(games, 2025, 10)
+          allowed = set(past['game_id'].dropna().astype(str))
+          runtime = MoneylineRuntime()
+          pbp = runtime._pbp_seguro_para_games(past, pd.DataFrame())
+          assert not pbp.empty
+          assert set(pbp['game_id'].dropna().astype(str)).issubset(allowed)
+          assert not ((pd.to_numeric(pbp['season']) > 2025) | ((pd.to_numeric(pbp['season']) == 2025) & (pd.to_numeric(pbp['week']) >= 10))).any()
+          assert runtime.entrenar(past, pd.DataFrame())
+          assert runtime.usa_pbp is True
+          print({'pbp_rows': len(pbp), 'usa_pbp': runtime.usa_pbp})
           PY
       - name: Existing PBP backtest smoke test
         run: python backtest_nfl_pbp_v1.py
