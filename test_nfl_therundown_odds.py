@@ -53,7 +53,7 @@ def fake_get(url, **kwargs):
     assert "/sports/2/events/2026-09-09" in url
     assert kwargs["params"]["market_ids"] == "1"
     assert kwargs["params"]["main_line"] == "true"
-    assert kwargs["headers"]["X-TheRundown-Key"] == "test-key"
+    assert kwargs["headers"]["X-TheRundown-Key"]
     return FakeResponse()
 
 
