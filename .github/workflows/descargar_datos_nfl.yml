@@ -19,6 +19,7 @@ permissions:
 jobs:
   actualizar-nfl:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
@@ -51,6 +52,12 @@ jobs:
 
       - name: Crear Parquet agregado y validar paridad
         run: python migrar_pbp_bigdata.py
+
+      - name: Verificar artefactos de producción antes del commit
+        run: |
+          test -s data/historico_nfl_pbp_team_game.csv
+          test -d data/parquet/pbp_team_game
+          test "$(find data/parquet/pbp_team_game -name 'pbp_team_game.parquet' -type f | wc -l)" -ge 1
 
       - name: Guardar datos reales y Parquet agregado en GitHub
         run: |
