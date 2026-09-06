@@ -16,8 +16,9 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: pip install -r requirements.txt
+      - run: pip install -r requirements-cloudrun.txt
       - name: Compile
-        run: python -m compileall modules migrar_pbp_bigdata.py
+        run: python -m compileall modules migrar_pbp_bigdata.py cloudrun_entrypoint.py cloudrun_api.py
       - name: Build nflverse development lake 2021-2025
         run: python migrar_pbp_bigdata.py --download --start 2021 --end 2025
       - name: DuckDB selective read smoke test
@@ -29,6 +30,17 @@ jobs:
           assert not df.empty
           assert set(df['season'].astype(int).unique()).issubset({2024, 2025})
           print(df.shape)
+          PY
+      - name: Cloud Run entrypoint really prefers Parquet
+        run: |
+          python - <<'PY'
+          import cloudrun_api as base
+          import cloudrun_entrypoint as prod
+          assert base.load_history is prod.load_history_parquet_first
+          assert getattr(base, 'PBP_STORAGE', None) == 'PARQUET'
+          games, pbp = base.load_history()
+          assert not games.empty and not pbp.empty
+          print({'storage': base.PBP_STORAGE, 'games': len(games), 'pbp': len(pbp)})
           PY
       - name: Production Moneyline auto-loads Parquet without look-ahead
         run: |
