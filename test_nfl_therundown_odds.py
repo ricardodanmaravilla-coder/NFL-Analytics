@@ -33,6 +33,32 @@ class FakeResponse:
         }
 
 
+class AliasResponse:
+    status_code = 200
+    headers = {}
+
+    def __init__(self, away, home):
+        self.away = away
+        self.home = home
+
+    def json(self):
+        names = {
+            "SFO": "San Francisco 49ers", "LAR": "Los Angeles Rams",
+            "MIA": "Miami Dolphins", "LVR": "Las Vegas Raiders",
+        }
+        return {"events": [{
+            "event_id": "alias",
+            "teams_normalized": [
+                {"abbreviation": self.away, "is_home": False},
+                {"abbreviation": self.home, "is_home": True},
+            ],
+            "markets": [{"market_id": 1, "period_id": 0, "participants": [
+                {"name": names[self.away], "lines": [{"prices": {"19": {"price": 120, "is_main_line": True}}}]},
+                {"name": names[self.home], "lines": [{"prices": {"19": {"price": -140, "is_main_line": True}}}]},
+            ]}],
+        }]}
+
+
 class IncompletePrimaryResponse(FakeResponse):
     def json(self):
         data = super().json()
@@ -58,103 +84,78 @@ def fake_get(url, **kwargs):
 
 
 def test_get_moneyline_uses_priority_book(monkeypatch):
-    odds._CACHE.clear()
-    monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
-    monkeypatch.setenv("THERUNDOWN_AFFILIATE_IDS", "19,22,23,3")
+    odds._CACHE.clear(); monkeypatch.setenv("THERUNDOWN_KEY", "test-key"); monkeypatch.setenv("THERUNDOWN_AFFILIATE_IDS", "19,22,23,3")
     q = odds.get_moneyline("SEA", "NE", "2026-09-09", get_fn=fake_get)
-    assert q["book"] == "DraftKings"
-    assert q["home_moneyline"] == -115
-    assert q["away_moneyline"] == -105
-    assert q["source"] == "TheRundown"
-    assert q["fetched_at"].endswith("Z")
-    assert q["slate_date"] == "2026-09-09"
+    assert q["book"] == "DraftKings" and q["home_moneyline"] == -115 and q["away_moneyline"] == -105
+    assert q["source"] == "TheRundown" and q["fetched_at"].endswith("Z") and q["slate_date"] == "2026-09-09"
 
 
 def test_missing_key_returns_no_quote(monkeypatch):
-    odds._CACHE.clear()
-    monkeypatch.delenv("THERUNDOWN_KEY", raising=False)
+    odds._CACHE.clear(); monkeypatch.delenv("THERUNDOWN_KEY", raising=False)
     assert odds.get_moneyline("SEA", "NE", "2026-09-09", get_fn=fake_get) is None
 
 
 def test_incomplete_primary_falls_back_to_other_legit_book(monkeypatch):
-    odds._CACHE.clear()
-    monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
-    monkeypatch.setenv("THERUNDOWN_AFFILIATE_IDS", "19,22,3")
-
-    def get_incomplete(url, **kwargs):
-        return IncompletePrimaryResponse()
-
-    q = odds.get_moneyline("SEA", "NE", "2026-09-09", get_fn=get_incomplete)
-    assert q["book"] == "Pinnacle"
-    assert q["home_moneyline"] == -109
-    assert q["away_moneyline"] == -112
+    odds._CACHE.clear(); monkeypatch.setenv("THERUNDOWN_KEY", "test-key"); monkeypatch.setenv("THERUNDOWN_AFFILIATE_IDS", "19,22,3")
+    q = odds.get_moneyline("SEA", "NE", "2026-09-09", get_fn=lambda url, **kwargs: IncompletePrimaryResponse())
+    assert q["book"] == "Pinnacle" and q["home_moneyline"] == -109 and q["away_moneyline"] == -112
 
 
 def test_default_priority_keeps_main_books_first(monkeypatch):
     monkeypatch.delenv("THERUNDOWN_AFFILIATE_IDS", raising=False)
-    priority = odds._priority()
-    assert priority[:3] == ["19", "22", "23"]
-    assert "3" in priority
+    priority = odds._priority(); assert priority[:3] == ["19", "22", "23"] and "3" in priority
 
 
 def test_diagnostic_is_safe_and_reports_books(monkeypatch):
-    monkeypatch.setenv("THERUNDOWN_KEY", "super-secret-key")
-    monkeypatch.setenv("THERUNDOWN_AFFILIATE_IDS", "19,22,3")
+    monkeypatch.setenv("THERUNDOWN_KEY", "super-secret-key"); monkeypatch.setenv("THERUNDOWN_AFFILIATE_IDS", "19,22,3")
     result = odds.diagnose_date("2026-09-09", get_fn=fake_get)
-    assert result["ok"] is True
-    assert result["reason"] == "OK"
-    assert result["events"] == 1
-    assert result["complete_moneyline_quotes"] == 1
-    assert "DraftKings" in result["offered_books"]
-    assert "Pinnacle" in result["offered_books"]
-    assert result["datapoints"] == "7"
-    assert "super-secret-key" not in repr(result)
+    assert result["ok"] is True and result["reason"] == "OK" and result["events"] == 1
+    assert result["complete_moneyline_quotes"] == 1 and "DraftKings" in result["offered_books"] and "Pinnacle" in result["offered_books"]
+    assert result["datapoints"] == "7" and "super-secret-key" not in repr(result)
 
 
 def test_diagnostic_explains_no_events(monkeypatch):
     monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
-
-    def get_empty(url, **kwargs):
-        return EmptyResponse()
-
-    result = odds.diagnose_date("2026-09-09", get_fn=get_empty)
-    assert result["ok"] is True
-    assert result["reason"] == "NO_EVENTS_FOR_DATE"
-    assert result["complete_moneyline_quotes"] == 0
+    result = odds.diagnose_date("2026-09-09", get_fn=lambda url, **kwargs: EmptyResponse())
+    assert result["ok"] is True and result["reason"] == "NO_EVENTS_FOR_DATE" and result["complete_moneyline_quotes"] == 0
 
 
 def test_sunday_game_can_match_thursday_weekly_slate(monkeypatch):
-    odds._CACHE.clear()
-    monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
-    requested_dates = []
-
+    odds._CACHE.clear(); monkeypatch.setenv("THERUNDOWN_KEY", "test-key"); requested_dates = []
     def get_weekly_slate(url, **kwargs):
-        requested_dates.append(url.rsplit("/", 1)[-1])
-        if url.endswith("2026-09-10"):
-            return FakeResponse()
-        return EmptyResponse()
-
+        requested_dates.append(url.rsplit("/", 1)[-1]); return FakeResponse() if url.endswith("2026-09-10") else EmptyResponse()
     q = odds.get_moneyline("SEA", "NE", "2026-09-13", get_fn=get_weekly_slate)
-    assert q is not None
-    assert q["book"] == "DraftKings"
-    assert q["slate_date"] == "2026-09-10"
-    assert requested_dates == ["2026-09-13", "2026-09-12", "2026-09-11", "2026-09-10"]
+    assert q is not None and q["book"] == "DraftKings" and q["slate_date"] == "2026-09-10"
+    assert requested_dates[:4] == ["2026-09-13", "2026-09-12", "2026-09-11", "2026-09-10"]
 
 
-def test_monday_game_can_match_thursday_weekly_slate(monkeypatch):
-    odds._CACHE.clear()
-    monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
-
-    def get_weekly_slate(url, **kwargs):
-        return FakeResponse() if url.endswith("2026-09-10") else EmptyResponse()
-
-    q = odds.get_moneyline("SEA", "NE", "2026-09-14", get_fn=get_weekly_slate)
-    assert q is not None
-    assert q["slate_date"] == "2026-09-10"
+def test_extended_window_can_find_earlier_week_snapshot(monkeypatch):
+    odds._CACHE.clear(); monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
+    q = odds.get_moneyline("SEA", "NE", "2026-09-16", get_fn=lambda url, **kwargs: FakeResponse() if url.endswith("2026-09-10") else EmptyResponse())
+    assert q is not None and q["slate_date"] == "2026-09-10"
 
 
-def test_team_aliases_cover_nflverse_variants():
+def test_forward_snapshot_is_last_resort(monkeypatch):
+    odds._CACHE.clear(); monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
+    q = odds.get_moneyline("SEA", "NE", "2026-09-09", get_fn=lambda url, **kwargs: FakeResponse() if url.endswith("2026-09-10") else EmptyResponse())
+    assert q is not None and q["slate_date"] == "2026-09-10"
+
+
+def test_team_aliases_cover_remaining_provider_variants():
     assert odds._norm_team("WSH") == "WAS"
     assert odds._norm_team("JAC") == "JAX"
     assert odds._norm_team("OAK") == "LV"
     assert odds._norm_team("STL") == "LA"
+    assert odds._norm_team("LVR") == "LV"
+    assert odds._norm_team("SFO") == "SF"
+    assert odds._norm_team("GNB") == "GB"
+    assert odds._norm_team("NWE") == "NE"
+
+
+def test_alias_matchups_sfo_lar_and_mia_lvr(monkeypatch):
+    odds._CACHE.clear(); monkeypatch.setenv("THERUNDOWN_KEY", "test-key"); monkeypatch.setenv("THERUNDOWN_AFFILIATE_IDS", "19")
+    q1 = odds.get_moneyline("LAR", "SF", "2026-09-13", get_fn=lambda url, **kwargs: AliasResponse("SFO", "LAR") if url.endswith("2026-09-13") else EmptyResponse())
+    odds._CACHE.clear()
+    q2 = odds.get_moneyline("LV", "MIA", "2026-09-13", get_fn=lambda url, **kwargs: AliasResponse("MIA", "LVR") if url.endswith("2026-09-13") else EmptyResponse())
+    assert q1 is not None and q1["home_moneyline"] == -140
+    assert q2 is not None and q2["home_moneyline"] == -140
