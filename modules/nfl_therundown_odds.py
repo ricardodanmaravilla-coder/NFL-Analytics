@@ -8,7 +8,7 @@ Historical nflverse lines remain for training/backtests only.
 
 import os
 import time
-from datetime import datetime, timezone
+from datetime import date as date_type, datetime, timedelta, timezone
 
 import requests
 
@@ -23,9 +23,10 @@ AFFILIATE_NAMES = {
 }
 TEAM_ALIASES = {
     "ARI":"ARI","ATL":"ATL","BAL":"BAL","BUF":"BUF","CAR":"CAR","CHI":"CHI","CIN":"CIN","CLE":"CLE",
-    "DAL":"DAL","DEN":"DEN","DET":"DET","GB":"GB","HOU":"HOU","IND":"IND","JAX":"JAX","KC":"KC",
+    "DAL":"DAL","DEN":"DEN","DET":"DET","GB":"GB","HOU":"HOU","IND":"IND","JAX":"JAX","JAC":"JAX","KC":"KC",
     "LA":"LA","LAR":"LA","LV":"LV","LAC":"LAC","MIA":"MIA","MIN":"MIN","NE":"NE","NO":"NO",
-    "NYG":"NYG","NYJ":"NYJ","PHI":"PHI","PIT":"PIT","SEA":"SEA","SF":"SF","TB":"TB","TEN":"TEN","WAS":"WAS",
+    "NYG":"NYG","NYJ":"NYJ","PHI":"PHI","PIT":"PIT","SEA":"SEA","SF":"SF","TB":"TB","TEN":"TEN",
+    "WAS":"WAS","WSH":"WAS","OAK":"LV","SD":"LAC","STL":"LA",
     "ARIZONA CARDINALS":"ARI","ATLANTA FALCONS":"ATL","BALTIMORE RAVENS":"BAL","BUFFALO BILLS":"BUF",
     "CAROLINA PANTHERS":"CAR","CHICAGO BEARS":"CHI","CINCINNATI BENGALS":"CIN","CLEVELAND BROWNS":"CLE",
     "DALLAS COWBOYS":"DAL","DENVER BRONCOS":"DEN","DETROIT LIONS":"DET","GREEN BAY PACKERS":"GB",
@@ -172,7 +173,7 @@ def _extract_quotes(payload, priority):
 
 
 def fetch_moneylines(gameday, get_fn=requests.get):
-    """Return {(away,home): quote} for one NFL slate date."""
+    """Return {(away,home): quote} for one TheRundown slate-date snapshot."""
     if not configured():
         return {}
     date = str(gameday)[:10]
@@ -190,6 +191,21 @@ def fetch_moneylines(gameday, get_fn=requests.get):
     out = _extract_quotes(payload, priority)
     _CACHE[date] = (now, out)
     return dict(out)
+
+
+def _candidate_slate_dates(gameday):
+    """TheRundown can group an NFL week under its slate start date (often Thursday).
+
+    nflverse stores each game's real kickoff date. Search the exact date first, then
+    up to four preceding dates so Sunday/Monday games can still match the Thursday
+    slate. A quote is accepted only when the normalized away/home pair matches.
+    """
+    raw = str(gameday)[:10]
+    try:
+        base = date_type.fromisoformat(raw)
+    except ValueError:
+        return [raw]
+    return [(base - timedelta(days=days)).isoformat() for days in range(0, 5)]
 
 
 def diagnose_date(gameday, get_fn=requests.get):
@@ -267,5 +283,12 @@ def diagnose_date(gameday, get_fn=requests.get):
 
 
 def get_moneyline(home, away, gameday, get_fn=requests.get):
-    quotes = fetch_moneylines(gameday, get_fn=get_fn)
-    return quotes.get((_norm_team(away), _norm_team(home)))
+    target = (_norm_team(away), _norm_team(home))
+    for slate_date in _candidate_slate_dates(gameday):
+        quotes = fetch_moneylines(slate_date, get_fn=get_fn)
+        quote = quotes.get(target)
+        if quote:
+            out = dict(quote)
+            out["slate_date"] = slate_date
+            return out
+    return None

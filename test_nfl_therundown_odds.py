@@ -67,6 +67,7 @@ def test_get_moneyline_uses_priority_book(monkeypatch):
     assert q["away_moneyline"] == -105
     assert q["source"] == "TheRundown"
     assert q["fetched_at"].endswith("Z")
+    assert q["slate_date"] == "2026-09-09"
 
 
 def test_missing_key_returns_no_quote(monkeypatch):
@@ -120,3 +121,40 @@ def test_diagnostic_explains_no_events(monkeypatch):
     assert result["ok"] is True
     assert result["reason"] == "NO_EVENTS_FOR_DATE"
     assert result["complete_moneyline_quotes"] == 0
+
+
+def test_sunday_game_can_match_thursday_weekly_slate(monkeypatch):
+    odds._CACHE.clear()
+    monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
+    requested_dates = []
+
+    def get_weekly_slate(url, **kwargs):
+        requested_dates.append(url.rsplit("/", 1)[-1])
+        if url.endswith("2026-09-10"):
+            return FakeResponse()
+        return EmptyResponse()
+
+    q = odds.get_moneyline("SEA", "NE", "2026-09-13", get_fn=get_weekly_slate)
+    assert q is not None
+    assert q["book"] == "DraftKings"
+    assert q["slate_date"] == "2026-09-10"
+    assert requested_dates == ["2026-09-13", "2026-09-12", "2026-09-11", "2026-09-10"]
+
+
+def test_monday_game_can_match_thursday_weekly_slate(monkeypatch):
+    odds._CACHE.clear()
+    monkeypatch.setenv("THERUNDOWN_KEY", "test-key")
+
+    def get_weekly_slate(url, **kwargs):
+        return FakeResponse() if url.endswith("2026-09-10") else EmptyResponse()
+
+    q = odds.get_moneyline("SEA", "NE", "2026-09-14", get_fn=get_weekly_slate)
+    assert q is not None
+    assert q["slate_date"] == "2026-09-10"
+
+
+def test_team_aliases_cover_nflverse_variants():
+    assert odds._norm_team("WSH") == "WAS"
+    assert odds._norm_team("JAC") == "JAX"
+    assert odds._norm_team("OAK") == "LV"
+    assert odds._norm_team("STL") == "LA"
