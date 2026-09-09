@@ -24,7 +24,8 @@ MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
 MAX_STAKE_FRACTION = 0.05
-MIN_PROBABILITY = 56.0
+MIN_PROBABILITY = 58.0
+MIN_MC_PROBABILITY = 58.0
 MAX_DISAGREEMENT = 15.0
 
 
@@ -76,12 +77,13 @@ def kelly_stake(probability_pct, odd, bankroll):
     return round(capped_fraction * 100.0, 2), round(bank * capped_fraction, 2), capped
 
 
-def _build_candidate(game, pick, probability, support_probs, odd_self, odd_other, bankroll,
+def _build_candidate(game, pick, probability, support_probs, mc_prob, odd_self, odd_other, bankroll,
                      auto_bet, market, line=None, book=None, source=None, fetched_at=None):
     p = num(probability)
+    mc = num(mc_prob)
     supports = [num(x) for x in support_probs]
     supports = [x for x in supports if x is not None]
-    if p is None or not supports:
+    if p is None or mc is None or not supports:
         return None
     probs = [p] + supports
     if max(probs) - min(probs) > MAX_DISAGREEMENT:
@@ -98,7 +100,7 @@ def _build_candidate(game, pick, probability, support_probs, odd_self, odd_other
     edge = (p / 100.0 - mkt) * 100.0
     ev = ((p / 100.0) * dec - 1.0) * 100.0
     disagreement = max(probs) - min(probs)
-    if p < MIN_PROBABILITY or edge < 3.0 or ev < 3.0:
+    if p < MIN_PROBABILITY or mc < MIN_MC_PROBABILITY or edge < 3.0 or ev < 3.0:
         return None
 
     kelly_pct, stake, kelly_capped = kelly_stake(p, odd, bankroll)
@@ -109,6 +111,7 @@ def _build_candidate(game, pick, probability, support_probs, odd_self, odd_other
         "market": market,
         "line": line,
         "probability": round(p, 1),
+        "mc_probability": round(mc, 1),
         "odds": int(odd),
         "edge": round(edge, 2),
         "ev": round(ev, 2),
@@ -126,13 +129,14 @@ def _build_candidate(game, pick, probability, support_probs, odd_self, odd_other
 
 def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bankroll=DEFAULT_BANKROLL,
               book=None, source=None, fetched_at=None):
-    """Moneyline: conserva consenso fuerte y sólo favoritos como auto-BET."""
+    """Moneyline: ML y Monte Carlo deben superar 58%; Elo sigue como confirmación de consenso."""
     p = primary_with_agreement(primary_prob, support_probs, max_disagreement=MAX_DISAGREEMENT)
     if p is None:
         return None
+    mc_prob = support_probs[-1] if support_probs else None
     odd = num(odd_self)
     return _build_candidate(
-        game, pick, p, support_probs, odd_self, odd_other, bankroll,
+        game, pick, p, support_probs, mc_prob, odd_self, odd_other, bankroll,
         auto_bet=bool(odd is not None and odd < 0), market="ML",
         book=book, source=source, fetched_at=fetched_at,
     )
@@ -140,13 +144,13 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
 
 def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, odd_other,
                      bankroll=DEFAULT_BANKROLL, book=None, source=None, fetched_at=None):
-    """Spread/Total: ML calibrado es primario y Monte Carlo empírico es guardrail.
+    """Spread/Total: ML calibrado y Monte Carlo deben superar 58%.
 
     A diferencia de Moneyline no existe concepto favorito/underdog para bloquear un
-    auto-BET. Si supera 56%, Edge 3 pp, EV 3% y desacuerdo <=15 pp, es BET.
+    auto-BET. Se mantienen Edge >=3 pp, EV >=3% y desacuerdo <=15 pp.
     """
     return _build_candidate(
-        game, pick, primary_prob, [mc_prob], odd_self, odd_other, bankroll,
+        game, pick, primary_prob, [mc_prob], mc_prob, odd_self, odd_other, bankroll,
         auto_bet=True, market=market, line=line,
         book=book, source=source, fetched_at=fetched_at,
     )
@@ -194,6 +198,7 @@ def health():
         "markets": ["moneyline", "spread", "total"],
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY,
+        "min_mc_probability": MIN_MC_PROBABILITY,
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
 
@@ -332,9 +337,10 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
             "week": week,
             "bankroll": round(bankroll, 2),
             "min_probability": MIN_PROBABILITY,
+            "min_mc_probability": MIN_MC_PROBABILITY,
             "kelly_policy": "1/4 Kelly, máximo 5% del bankroll por BET",
             "markets": ["ML", "SPREAD", "TOTAL"],
-            "market_policy": "ML: ML+Elo+MC; Spread/Total: ML calibrado+MC; max desacuerdo 15 pp; Edge>=3; EV>=3",
+            "market_policy": "ML y MC >=58%; ML: Elo como confirmación; Spread/Total: ML calibrado+MC; max desacuerdo 15 pp; Edge>=3; EV>=3",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
             "bets": bets,
             "leans": leans,
