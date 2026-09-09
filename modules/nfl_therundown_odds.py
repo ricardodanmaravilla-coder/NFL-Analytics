@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-"""Live NFL moneyline quotes from TheRundown V2.
+"""Cuotas NFL de TheRundown V2 para Moneyline, spread y total.
 
-Production rule: no key / no complete real quote => no executable price.
-Historical nflverse lines remain for training/backtests only.
+Regla de producción: sin llave / sin precio real completo del mercado => no hay
+precio ejecutable. Las líneas nflverse se mantienen sólo para histórico/backtest.
 """
 
 import os
@@ -62,6 +62,15 @@ def _price(value):
         return None
 
 
+def _line_value(value):
+    try:
+        if value in (None, ""):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _latest_price_obj(value):
     if isinstance(value, dict):
         return value
@@ -102,7 +111,7 @@ def _request_snapshot(gameday, get_fn=requests.get):
     affiliate_ids = ",".join(priority)
     url = f"https://therundown.io/api/v2/sports/{NFL_SPORT_ID}/events/{date}"
     params = {
-        "market_ids": "1",
+        "market_ids": "1,2,3",
         "affiliate_ids": affiliate_ids,
         "main_line": "true",
         "hide_closed": "true",
@@ -110,6 +119,19 @@ def _request_snapshot(gameday, get_fn=requests.get):
     }
     response = get_fn(url, params=params, headers={"X-TheRundown-Key": key, "Accept": "application/json"}, timeout=12)
     return response, priority, date
+
+
+def _participant_key(participant, home, away):
+    raw = participant.get("abbreviation") or participant.get("name") or participant.get("team_name") or ""
+    team = _norm_team(raw)
+    if team in {home, away}:
+        return team
+    text = str(raw).strip().lower()
+    if "over" in text:
+        return "over"
+    if "under" in text:
+        return "under"
+    return text
 
 
 def _extract_quotes(payload, priority):
@@ -122,24 +144,30 @@ def _extract_quotes(payload, priority):
         away, home = _team_pair(event)
         if not away or not home:
             continue
-        by_book = {aid: {} for aid in priority}
+
+        ml = {aid: {} for aid in priority}
+        spread = {aid: {} for aid in priority}
+        total = {aid: {} for aid in priority}
+
         for market in event.get("markets") or []:
-            if not isinstance(market, dict) or int(market.get("market_id") or 0) != 1:
+            if not isinstance(market, dict):
+                continue
+            market_id = int(market.get("market_id") or 0)
+            if market_id not in {1, 2, 3}:
                 continue
             if market.get("period_id") not in (None, "", 0, "0"):
                 continue
             for participant in market.get("participants") or []:
                 if not isinstance(participant, dict):
                     continue
-                sel = _norm_team(participant.get("abbreviation") or participant.get("name") or participant.get("team_name"))
-                if sel not in {home, away}:
-                    continue
+                sel = _participant_key(participant, home, away)
                 lines = participant.get("lines") or []
                 if isinstance(lines, dict):
                     lines = [lines]
                 for line in lines:
                     if not isinstance(line, dict):
                         continue
+                    value = _line_value(line.get("value"))
                     prices = line.get("prices") or {}
                     if not isinstance(prices, dict):
                         continue
@@ -150,22 +178,60 @@ def _extract_quotes(payload, priority):
                         if pobj.get("is_main_line") is False or pobj.get("closed_at") not in (None, ""):
                             continue
                         p = _price(pobj.get("price", pobj.get("odds")))
-                        if p is not None:
-                            by_book[aid][sel] = p
-        chosen = next((aid for aid in priority if home in by_book[aid] and away in by_book[aid]), None)
-        if chosen:
-            out[(away, home)] = {
-                "home_moneyline": by_book[chosen][home],
-                "away_moneyline": by_book[chosen][away],
-                "book": AFFILIATE_NAMES.get(chosen, f"TheRundown {chosen}"),
-                "affiliate_id": chosen,
-                "source": "TheRundown",
-                "fetched_at": fetched_at,
-            }
+                        if p is None:
+                            continue
+                        if market_id == 1 and sel in {home, away}:
+                            ml[aid][sel] = p
+                        elif market_id == 2 and sel in {home, away} and value is not None:
+                            spread[aid][sel] = (value, p)
+                        elif market_id == 3 and sel in {"over", "under"} and value is not None:
+                            total[aid][sel] = (value, p)
+
+        quote = {"source": "TheRundown", "fetched_at": fetched_at}
+
+        ml_book = next((aid for aid in priority if home in ml[aid] and away in ml[aid]), None)
+        if ml_book:
+            quote.update({
+                "home_moneyline": ml[ml_book][home],
+                "away_moneyline": ml[ml_book][away],
+                "book": AFFILIATE_NAMES.get(ml_book, f"TheRundown {ml_book}"),
+                "affiliate_id": ml_book,
+            })
+
+        spread_book = next((aid for aid in priority if home in spread[aid] and away in spread[aid]), None)
+        if spread_book:
+            hline, hprice = spread[spread_book][home]
+            aline, aprice = spread[spread_book][away]
+            if abs(hline + aline) <= 0.01:
+                quote.update({
+                    "home_spread": hline,
+                    "home_spread_odds": hprice,
+                    "away_spread": aline,
+                    "away_spread_odds": aprice,
+                    "spread_book": AFFILIATE_NAMES.get(spread_book, f"TheRundown {spread_book}"),
+                    "spread_affiliate_id": spread_book,
+                })
+
+        total_book = next((aid for aid in priority if "over" in total[aid] and "under" in total[aid]), None)
+        if total_book:
+            oline, oprice = total[total_book]["over"]
+            uline, uprice = total[total_book]["under"]
+            if abs(oline - uline) <= 0.01:
+                quote.update({
+                    "total_line": oline,
+                    "over_odds": oprice,
+                    "under_odds": uprice,
+                    "total_book": AFFILIATE_NAMES.get(total_book, f"TheRundown {total_book}"),
+                    "total_affiliate_id": total_book,
+                })
+
+        if any(k in quote for k in ("home_moneyline", "home_spread", "total_line")):
+            out[(away, home)] = quote
     return out
 
 
 def fetch_moneylines(gameday, get_fn=requests.get):
+    """Compatibilidad: ahora devuelve el snapshot completo 1/2/3 por partido."""
     if not configured():
         return {}
     date = str(gameday)[:10]
@@ -185,13 +251,10 @@ def fetch_moneylines(gameday, get_fn=requests.get):
     return dict(out)
 
 
-def _candidate_slate_dates(gameday):
-    """Search nearby TheRundown snapshots while keeping matchup identity strict.
+fetch_markets = fetch_moneylines
 
-    Exact kickoff date is tried first, then six days backward (weekly slate grouping),
-    then two days forward for feeds that file an event under a later slate snapshot.
-    No quote is accepted unless normalized away/home match exactly.
-    """
+
+def _candidate_slate_dates(gameday):
     raw = str(gameday)[:10]
     try:
         base = date_type.fromisoformat(raw)
@@ -203,7 +266,7 @@ def _candidate_slate_dates(gameday):
 
 def diagnose_date(gameday, get_fn=requests.get):
     date = str(gameday)[:10]
-    result = {"configured": configured(), "sport_id": NFL_SPORT_ID, "date": date, "market_id": 1, "affiliate_priority": _priority()}
+    result = {"configured": configured(), "sport_id": NFL_SPORT_ID, "date": date, "market_ids": [1, 2, 3], "affiliate_priority": _priority()}
     if not configured():
         result.update({"ok": False, "reason": "THERUNDOWN_KEY_NOT_CONFIGURED"})
         return result
@@ -218,32 +281,28 @@ def diagnose_date(gameday, get_fn=requests.get):
             return result
         payload = response.json()
         events = payload.get("events", []) if isinstance(payload, dict) else []
-        offered = set(); moneyline_markets = 0; event_rows = []
+        counts = {1: 0, 2: 0, 3: 0}
         for event in events:
-            if not isinstance(event, dict):
-                continue
-            away, home = _team_pair(event); books_for_event = set()
             for market in event.get("markets") or []:
-                if not isinstance(market, dict) or int(market.get("market_id") or 0) != 1:
+                try:
+                    mid = int(market.get("market_id") or 0)
+                except Exception:
                     continue
-                if market.get("period_id") not in (None, "", 0, "0"):
-                    continue
-                moneyline_markets += 1
-                for participant in market.get("participants") or []:
-                    for line in participant.get("lines") or []:
-                        if not isinstance(line, dict):
-                            continue
-                        prices = line.get("prices") or {}
-                        if isinstance(prices, dict):
-                            books_for_event.update(str(x) for x in prices.keys())
-            offered.update(books_for_event)
-            event_rows.append({"game": f"{away} @ {home}" if away and home else str(event.get("event_id") or "unknown"), "affiliate_ids": sorted(books_for_event)})
+                if mid in counts and market.get("period_id") in (None, "", 0, "0"):
+                    counts[mid] += 1
         quotes = _extract_quotes(payload, priority)
-        result.update({"ok": True, "events": len(events), "moneyline_markets": moneyline_markets, "complete_moneyline_quotes": len(quotes), "offered_affiliate_ids": sorted(offered), "offered_books": [AFFILIATE_NAMES.get(aid, f"TheRundown {aid}") for aid in sorted(offered)], "games": event_rows})
-        if not events: result["reason"] = "NO_EVENTS_FOR_DATE"
-        elif moneyline_markets == 0: result["reason"] = "NO_MONEYLINE_MARKET"
-        elif not quotes: result["reason"] = "NO_COMPLETE_TWO_SIDED_MONEYLINE"
-        else: result["reason"] = "OK"
+        result.update({
+            "ok": True,
+            "events": len(events),
+            "moneyline_markets": counts[1],
+            "spread_markets": counts[2],
+            "total_markets": counts[3],
+            "games_with_any_quote": len(quotes),
+            "games_with_moneyline": sum(1 for q in quotes.values() if q.get("home_moneyline") is not None and q.get("away_moneyline") is not None),
+            "games_with_spread": sum(1 for q in quotes.values() if q.get("home_spread") is not None),
+            "games_with_total": sum(1 for q in quotes.values() if q.get("total_line") is not None),
+            "reason": "OK" if events else "NO_EVENTS_FOR_DATE",
+        })
         return result
     except Exception as exc:
         result.update({"ok": False, "reason": f"{type(exc).__name__}"})
@@ -251,6 +310,7 @@ def diagnose_date(gameday, get_fn=requests.get):
 
 
 def get_moneyline(home, away, gameday, get_fn=requests.get):
+    """Compatibilidad histórica; devuelve ML y, cuando existen, spread/total."""
     target = (_norm_team(away), _norm_team(home))
     for slate_date in _candidate_slate_dates(gameday):
         quote = fetch_moneylines(slate_date, get_fn=get_fn).get(target)
@@ -259,3 +319,6 @@ def get_moneyline(home, away, gameday, get_fn=requests.get):
             out["slate_date"] = slate_date
             return out
     return None
+
+
+get_markets = get_moneyline
