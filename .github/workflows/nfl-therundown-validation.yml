@@ -25,7 +25,20 @@ jobs:
         run: pytest -q test_nfl_therundown_odds.py
       - name: Guard live-price policy
         run: |
-          grep -q 'get_moneyline(home, away' cloudrun_api.py
-          grep -q 'NO BET - sin Moneyline real de TheRundown' cloudrun_api.py
-          grep -q 'simular_nfl_montecarlo(home, away, past_games, None, None)' cloudrun_api.py
+          # Producción debe obtener una cotización TheRundown por juego; el objeto
+          # incluye únicamente mercados reales que el proveedor haya entregado.
+          grep -q 'quote = get_moneyline(home, away' cloudrun_api.py
+          grep -q 'NO BET - sin mercados reales de TheRundown' cloudrun_api.py
+
+          # Los tres mercados deben salir del quote real, nunca de nflverse.
+          grep -q 'quote.get("home_moneyline")' cloudrun_api.py
+          grep -q 'quote.get("home_spread")' cloudrun_api.py
+          grep -q 'quote.get("total_line")' cloudrun_api.py
+          grep -q 'quote.get("over_odds")' cloudrun_api.py
+          grep -q 'quote.get("under_odds")' cloudrun_api.py
+
+          # Monte Carlo debe recibir la línea real de total y el umbral del spread.
+          grep -q 'simular_nfl_montecarlo(home, away, past_games, total_line, spread_threshold)' cloudrun_api.py
+
+          # Política histórica: nunca volver a tomar Moneyline del schedule nflverse.
           ! grep -q 'hm, am = num(g.get("home_moneyline"))' cloudrun_api.py
