@@ -19,7 +19,7 @@ from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 from modules.nfl_therundown_odds import configured as therundown_configured, get_moneyline
 from modules.nfl_weather import forecast_kickoff
 
-app = FastAPI(title="NFL Analytics API", version="3.7")
+app = FastAPI(title="NFL Analytics API", version="3.8")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
@@ -27,6 +27,13 @@ MAX_STAKE_FRACTION = 0.05
 MIN_PROBABILITY = 58.0
 MIN_MC_PROBABILITY = 58.0
 MAX_DISAGREEMENT = 15.0
+
+# Staking híbrido: Kelly conserva el componente de valor/precio, pero la mayor parte
+# del stake se asigna por confianza del modelo. Así una apuesta con mayor probabilidad
+# no queda penalizada de forma excesiva solo porque su momio sea más caro.
+KELLY_WEIGHT = 0.30
+CONFIDENCE_WEIGHT = 0.70
+CONFIDENCE_STAKE_SLOPE = 0.40
 
 
 def num(v):
@@ -60,18 +67,35 @@ def two_way(a, b):
 
 
 def kelly_stake(probability_pct, odd, bankroll):
+    """Kelly híbrido de seguridad.
+
+    30% del tamaño proviene de 1/4 Kelly y 70% de una escala de confianza basada en
+    la probabilidad del modelo. Se conserva un tope absoluto de 5% del bankroll.
+    Esto prioriza picks con mayor probabilidad cuando ambos ya superaron los filtros
+    mínimos de Edge y EV, sin ignorar completamente el precio del mercado.
+    """
     dec = american_to_decimal(odd)
-    p = num(probability_pct)
+    p_pct = num(probability_pct)
     bank = num(bankroll)
-    if dec is None or p is None or bank is None or bank <= 0:
+    if dec is None or p_pct is None or bank is None or bank <= 0:
         return 0.0, 0.0, False
     b = dec - 1.0
     if b <= 0:
         return 0.0, 0.0, False
-    p = min(max(p / 100.0, 0.0), 1.0)
+
+    p = min(max(p_pct / 100.0, 0.0), 1.0)
     q = 1.0 - p
     full_kelly = max(0.0, (b * p - q) / b)
-    raw_fraction = full_kelly * KELLY_FRACTION
+    quarter_kelly = full_kelly * KELLY_FRACTION
+
+    # 58% -> 3.2% de confianza; 60% -> 4%; 62.5%+ -> 5% (antes del blend).
+    confidence_fraction = max(0.0, (p - 0.50) * CONFIDENCE_STAKE_SLOPE)
+    confidence_fraction = min(confidence_fraction, MAX_STAKE_FRACTION)
+
+    raw_fraction = (
+        KELLY_WEIGHT * quarter_kelly
+        + CONFIDENCE_WEIGHT * confidence_fraction
+    )
     capped_fraction = min(raw_fraction, MAX_STAKE_FRACTION)
     capped = raw_fraction > capped_fraction + 1e-12
     return round(capped_fraction * 100.0, 2), round(bank * capped_fraction, 2), capped
@@ -192,13 +216,14 @@ def health():
     return {
         "status": "ok",
         "service": "NFL Analytics Cloud Run",
-        "version": "3.7",
+        "version": "3.8",
         "kickoff_weather": True,
         "live_odds_provider": "TheRundown",
         "markets": ["moneyline", "spread", "total"],
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY,
         "min_mc_probability": MIN_MC_PROBABILITY,
+        "staking_policy": "Kelly híbrido: 30% 1/4 Kelly + 70% confianza; máximo 5%",
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
 
@@ -338,7 +363,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
             "bankroll": round(bankroll, 2),
             "min_probability": MIN_PROBABILITY,
             "min_mc_probability": MIN_MC_PROBABILITY,
-            "kelly_policy": "1/4 Kelly, máximo 5% del bankroll por BET",
+            "kelly_policy": "Kelly híbrido seguridad: 30% de 1/4 Kelly + 70% confianza; máximo 5% del bankroll por BET",
             "markets": ["ML", "SPREAD", "TOTAL"],
             "market_policy": "ML y MC >=58%; ML: Elo como confirmación; Spread/Total: ML calibrado+MC; max desacuerdo 15 pp; Edge>=3; EV>=3",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
