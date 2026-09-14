@@ -1,0 +1,51 @@
+name: Liquidar Picks NFL
+
+on:
+  schedule:
+    # GitHub cron usa UTC. Ejecutar cada hora evita depender de una sola corrida diaria.
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nfl-settlement.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nfl-settlement
+  cancel-in-progress: false
+
+jobs:
+  liquidar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Liquidar picks pendientes en Cloud Run
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENDPOINT="https://nfl-analytics-664101772310.northamerica-south1.run.app/api/settle"
+          response="$(curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 10 --retry-all-errors \
+            --max-time 120 \
+            "$ENDPOINT")"
+          echo "$response"
+
+          python - "$response" <<'PY'
+          import json, sys
+          raw = sys.argv[1]
+          try:
+              data = json.loads(raw)
+          except Exception as exc:
+              raise SystemExit(f"Respuesta no JSON del cobrador: {exc}: {raw[:500]}")
+
+          if data.get("ok") is not True:
+              raise SystemExit(f"El cobrador NFL devolvió ok!=true: {data}")
+
+          print(
+              "NFL settlement OK | "
+              f"settled={data.get('settled', 0)} | "
+              f"pending={data.get('pending', 0)} | "
+              f"message={data.get('message', '')}"
+          )
+          PY
