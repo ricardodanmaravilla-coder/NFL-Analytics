@@ -16,6 +16,13 @@ HEADERS = [
 ]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
+# nflverse/nfl_data_py y ESPN no usan siempre la misma abreviatura.
+_ESPN_TEAM_ALIASES = {
+    "WSH": "WAS",
+    "JAC": "JAX",
+    "LAR": "LA",
+}
+
 
 def _clean(value: Any) -> str:
     if value is None:
@@ -155,8 +162,74 @@ def _grade(parsed, home, away, home_score, away_score):
     return None
 
 
+def _normalize_team(team: Any) -> str:
+    value = str(team or "").strip().upper()
+    return _ESPN_TEAM_ALIASES.get(value, value)
+
+
+def _espn_final_scores(season_week_pairs):
+    """Devuelve marcadores FINAL como respaldo cuando nfl_data_py aún no los publica.
+
+    Solo acepta eventos con status.type.completed=true para evitar liquidar partidos en vivo.
+    La llave es (season, nfl_week, home, away).
+    """
+    import requests
+
+    out = {}
+    url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+    headers = {"User-Agent": "NFL-Analytics/3.8 settlement"}
+    for season, nfl_week in sorted(set(season_week_pairs)):
+        # Temporada regular: week 1-18. Para postemporada, ESPN reinicia week en 1.
+        if int(nfl_week) <= 18:
+            season_type = 2
+            espn_week = int(nfl_week)
+        else:
+            season_type = 3
+            espn_week = max(1, int(nfl_week) - 18)
+        try:
+            response = requests.get(
+                url,
+                params={"dates": int(season), "seasontype": season_type, "week": espn_week, "limit": 100},
+                headers=headers,
+                timeout=12,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            continue
+
+        for event in payload.get("events", []) or []:
+            status = ((event.get("status") or {}).get("type") or {})
+            if not bool(status.get("completed")):
+                continue
+            competitions = event.get("competitions") or []
+            if not competitions:
+                continue
+            competitors = competitions[0].get("competitors") or []
+            home = away = None
+            home_score = away_score = None
+            for competitor in competitors:
+                team = _normalize_team(((competitor.get("team") or {}).get("abbreviation")))
+                try:
+                    score = float(competitor.get("score"))
+                except Exception:
+                    score = None
+                if competitor.get("homeAway") == "home":
+                    home, home_score = team, score
+                elif competitor.get("homeAway") == "away":
+                    away, away_score = team, score
+            if home and away and home_score is not None and away_score is not None:
+                out[(int(season), int(nfl_week), home, away)] = (home_score, away_score)
+    return out
+
+
 def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
-    """Liquida BET pendientes de Moneyline, spread y total usando marcador final real."""
+    """Liquida BET pendientes de ML, spread y total usando marcadores finales reales.
+
+    Fuente primaria: nfl_data_py/nflverse. Si el partido existe pero el marcador aún viene
+    vacío (o el juego no aparece), usa ESPN scoreboard como respaldo y únicamente liquida
+    eventos marcados oficialmente como completed.
+    """
     target_sheet_id = (sheet_id or SHEET_ID).strip()
     target_worksheet = (worksheet or WORKSHEET).strip() or "NFL_Picks"
     credentials = None; project_id = None
@@ -174,7 +247,7 @@ def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
         if values[0][:len(HEADERS)] != HEADERS:
             return {"ok": False, "settled": 0, "pending": 0, "message": "header mismatch"}
 
-        pending_rows = []; seasons = set(); unparseable = 0
+        pending_rows = []; seasons = set(); season_weeks = set(); unparseable = 0
         for row_number, row in enumerate(values[1:], start=2):
             result = row[12].strip().upper() if len(row) > 12 and row[12] else "PENDIENTE"
             if result != "PENDIENTE" or len(row) < 11:
@@ -186,34 +259,59 @@ def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
             game = row[3].strip(); pick = row[4].strip()
             if " @ " not in game:
                 continue
-            away, home = [x.strip() for x in game.split(" @ ", 1)]
+            away, home = [_normalize_team(x) for x in game.split(" @ ", 1)]
             parsed = _parse_pick(pick, home, away)
             if not parsed:
                 unparseable += 1; continue
             pending_rows.append({"row_number": row_number, "season": season, "week": week,
                                  "away": away, "home": home, "parsed": parsed, "odds": odds, "stake": stake})
-            seasons.add(season)
+            seasons.add(season); season_weeks.add((season, week))
 
         if not pending_rows:
             return {"ok": True, "settled": 0, "pending": unparseable, "message": "no parseable pending picks"}
 
-        schedules = nfl.import_schedules(sorted(seasons))
+        try:
+            schedules = nfl.import_schedules(sorted(seasons))
+        except Exception:
+            schedules = pd.DataFrame()
+
+        # Cargamos el respaldo una sola vez por semana/temporada, no una vez por apuesta.
+        fallback_scores = _espn_final_scores(season_weeks)
         updates = []; settled = 0; still_pending = unparseable
+        source_counts = {"nflverse": 0, "espn": 0}
         now_mx = datetime.now(ZoneInfo("America/Mexico_City")).strftime("%Y-%m-%d %H:%M:%S")
+
         for item in pending_rows:
-            matches = schedules[(schedules["week"] == item["week"]) &
-                                (schedules["home_team"] == item["home"]) &
-                                (schedules["away_team"] == item["away"])]
-            if "season" in schedules.columns:
-                matches = matches[schedules.loc[matches.index, "season"] == item["season"]]
-            if matches.empty:
-                still_pending += 1; continue
-            gr = matches.iloc[-1]; hs = gr.get("home_score"); aws = gr.get("away_score")
-            if pd.isna(hs) or pd.isna(aws):
-                still_pending += 1; continue
-            status = _grade(item["parsed"], item["home"], item["away"], float(hs), float(aws))
+            hs = aws = None
+            source = None
+
+            if not schedules.empty and {"week", "home_team", "away_team"}.issubset(schedules.columns):
+                matches = schedules[(schedules["week"] == item["week"]) &
+                                    (schedules["home_team"].map(_normalize_team) == item["home"]) &
+                                    (schedules["away_team"].map(_normalize_team) == item["away"])]
+                if "season" in schedules.columns:
+                    matches = matches[pd.to_numeric(matches["season"], errors="coerce") == item["season"]]
+                if not matches.empty:
+                    gr = matches.iloc[-1]
+                    nhs, naws = gr.get("home_score"), gr.get("away_score")
+                    if not pd.isna(nhs) and not pd.isna(naws):
+                        hs, aws = float(nhs), float(naws)
+                        source = "nflverse"
+
+            if hs is None or aws is None:
+                fallback = fallback_scores.get((item["season"], item["week"], item["home"], item["away"]))
+                if fallback is not None:
+                    hs, aws = fallback
+                    source = "espn"
+
+            if hs is None or aws is None:
+                still_pending += 1
+                continue
+
+            status = _grade(item["parsed"], item["home"], item["away"], hs, aws)
             if status is None:
-                still_pending += 1; continue
+                still_pending += 1
+                continue
             profit = _profit(item["stake"], item["odds"], status == "GANADA", push=status == "PUSH")
             rn = item["row_number"]
             updates.extend([
@@ -221,12 +319,15 @@ def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
                 {"range": f"{target_worksheet}!N{rn}:O{rn}", "majorDimension": "ROWS", "values": [[profit, now_mx]]},
             ])
             settled += 1
+            source_counts[source] = source_counts.get(source, 0) + 1
 
         if updates:
             _request_json(session, "POST", f"https://sheets.googleapis.com/v4/spreadsheets/{target_sheet_id}/values:batchUpdate",
                           json={"valueInputOption": "USER_ENTERED", "data": updates})
         return {"ok": True, "settled": settled, "pending": still_pending, "worksheet": target_worksheet,
-                "message": "settlement complete (ML/SPREAD/TOTAL)", "adc_project": project_id}
+                "sources": source_counts,
+                "message": "settlement complete (ML/SPREAD/TOTAL; nflverse + ESPN final fallback)",
+                "adc_project": project_id}
     except Exception as exc:
         return {"ok": False, "settled": 0, "pending": 0, "worksheet": target_worksheet,
                 "message": f"{type(exc).__name__}: {str(exc) or repr(exc)}"[:1000],
