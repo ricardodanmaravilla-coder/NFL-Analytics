@@ -12,7 +12,7 @@ WORKSHEET = os.getenv("GOOGLE_SHEETS_WORKSHEET", "NFL_Picks")
 HEADERS = [
     "Fecha", "Temporada", "Semana", "Partido", "Pick", "Probabilidad %", "Momio",
     "Edge pp", "EV %", "Kelly 1/4 %", "Apostar $", "Acción", "Resultado",
-    "Profit $", "Fecha cierre", "ID",
+    "Profit $", "Fecha cierre", "ID", "Marcador final",
 ]
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -64,6 +64,13 @@ def _profit(stake: float, odds: float, won: bool, push: bool = False) -> float:
 _profit_for_moneyline = _profit
 
 
+def _format_final_score(away: str, home: str, away_score: float, home_score: float) -> str:
+    def _fmt(value: float) -> str:
+        number = float(value)
+        return str(int(number)) if number.is_integer() else str(number)
+    return f"{away} {_fmt(away_score)} - {home} {_fmt(home_score)}"
+
+
 def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankroll: float,
               sheet_id: str | None = None, worksheet: str | None = None):
     """Inserta snapshots BET inmutables. Re-escanear nunca reescribe una apuesta previa."""
@@ -82,13 +89,13 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
         credentials, project_id = _credentials()
         session = AuthorizedSession(credentials)
         base = f"https://sheets.googleapis.com/v4/spreadsheets/{target_sheet_id}/values"
-        encoded_range = quote(f"{target_worksheet}!A:P", safe="")
+        encoded_range = quote(f"{target_worksheet}!A:Q", safe="")
         values = _request_json(session, "GET", f"{base}/{encoded_range}").get("values", [])
 
         if not values:
-            header_range = quote(f"{target_worksheet}!A1:P1", safe="")
+            header_range = quote(f"{target_worksheet}!A1:Q1", safe="")
             _request_json(session, "PUT", f"{base}/{header_range}?valueInputOption=RAW",
-                          json={"range": f"{target_worksheet}!A1:P1", "majorDimension": "ROWS", "values": [HEADERS]})
+                          json={"range": f"{target_worksheet}!A1:Q1", "majorDimension": "ROWS", "values": [HEADERS]})
             values = [HEADERS]
         elif values[0][:len(HEADERS)] != HEADERS:
             return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0,
@@ -105,11 +112,11 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
             payload.append([
                 now_mx, int(season), int(week), _clean(bet.get("game")), _clean(bet.get("pick")),
                 bet.get("probability", ""), bet.get("odds", ""), bet.get("edge", ""), bet.get("ev", ""),
-                bet.get("kelly", ""), bet.get("stake", ""), "BET", "PENDIENTE", "", "", rec_id,
+                bet.get("kelly", ""), bet.get("stake", ""), "BET", "PENDIENTE", "", "", rec_id, "",
             ])
 
         if payload:
-            append_range = quote(f"{target_worksheet}!A:P", safe="")
+            append_range = quote(f"{target_worksheet}!A:Q", safe="")
             _request_json(session, "POST", f"{base}/{append_range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
                           json={"majorDimension": "ROWS", "values": payload})
 
@@ -240,7 +247,7 @@ def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
 
         credentials, project_id = _credentials(); session = AuthorizedSession(credentials)
         base = f"https://sheets.googleapis.com/v4/spreadsheets/{target_sheet_id}/values"
-        encoded_range = quote(f"{target_worksheet}!A:P", safe="")
+        encoded_range = quote(f"{target_worksheet}!A:Q", safe="")
         values = _request_json(session, "GET", f"{base}/{encoded_range}").get("values", [])
         if len(values) <= 1:
             return {"ok": True, "settled": 0, "pending": 0, "message": "no picks"}
@@ -313,10 +320,12 @@ def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
                 still_pending += 1
                 continue
             profit = _profit(item["stake"], item["odds"], status == "GANADA", push=status == "PUSH")
+            final_score = _format_final_score(item["away"], item["home"], aws, hs)
             rn = item["row_number"]
             updates.extend([
                 {"range": f"{target_worksheet}!M{rn}", "majorDimension": "ROWS", "values": [[status]]},
                 {"range": f"{target_worksheet}!N{rn}:O{rn}", "majorDimension": "ROWS", "values": [[profit, now_mx]]},
+                {"range": f"{target_worksheet}!Q{rn}", "majorDimension": "ROWS", "values": [[final_score]]},
             ])
             settled += 1
             source_counts[source] = source_counts.get(source, 0) + 1
@@ -326,7 +335,7 @@ def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
                           json={"valueInputOption": "USER_ENTERED", "data": updates})
         return {"ok": True, "settled": settled, "pending": still_pending, "worksheet": target_worksheet,
                 "sources": source_counts,
-                "message": "settlement complete (ML/SPREAD/TOTAL; nflverse + ESPN final fallback)",
+                "message": "settlement complete (ML/SPREAD/TOTAL; final score saved; nflverse + ESPN final fallback)",
                 "adc_project": project_id}
     except Exception as exc:
         return {"ok": False, "settled": 0, "pending": 0, "worksheet": target_worksheet,
