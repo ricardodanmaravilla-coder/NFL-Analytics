@@ -12,6 +12,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  GCP_PROJECT_ID: nfl-analytics-engine
+  GCP_REGION: us-central1
+  CLOUD_RUN_SERVICE: nfl-predictor
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -24,11 +29,9 @@ jobs:
       - name: Validate required configuration
         shell: bash
         env:
-          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           set -euo pipefail
-          test -n "$GCP_PROJECT_ID" || { echo "Missing repository variable: GCP_PROJECT_ID"; exit 1; }
           test -n "$GCP_SA_KEY" || { echo "Missing repository secret: GCP_SA_KEY"; exit 1; }
 
       - name: Authenticate to Google Cloud
@@ -39,22 +42,18 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
 
       - name: Compile production entrypoint
         run: python -m py_compile cloudrun_api.py cloudrun_entrypoint.py modules/nfl_google_sheets.py
 
       - name: Deploy to Cloud Run
         shell: bash
-        env:
-          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-          SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'nfl-analytics' }}
         run: |
           set -euo pipefail
-          gcloud run deploy "$SERVICE" \
-            --project "$PROJECT_ID" \
-            --region "$REGION" \
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
             --source . \
             --allow-unauthenticated \
             --quiet
@@ -62,13 +61,9 @@ jobs:
       - name: Resolve service URL
         id: service
         shell: bash
-        env:
-          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-          SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'nfl-analytics' }}
         run: |
           set -euo pipefail
-          URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
+          URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.url)')"
           test -n "$URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Cloud Run URL: $URL"
