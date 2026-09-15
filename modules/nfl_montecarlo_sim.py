@@ -8,47 +8,41 @@ def _ordenar(df):
 
 
 def _muestras_equipo(df, equipo, ultimos_n=17, venue_n=8):
-    """Devuelve únicamente marcadores reales previos del equipo.
+    """Devuelve marcadores reales previos sin duplicar partidos.
 
-    Se usan los últimos N juegos generales y, con peso adicional, los últimos juegos
-    en la condición local/visita correspondiente. No se generan Normal/Poisson ni
-    se rellenan muestras faltantes con promedios ficticios.
+    La versión anterior concatenaba los últimos partidos generales con los de venue,
+    haciendo que algunos juegos aparecieran dos veces y recibieran peso implícito.
+    Ahora cada partido aparece una sola vez; el venue se conserva como diagnóstico,
+    pero no se vuelve a inyectar en la distribución.
     """
     df = _ordenar(df)
     home = df[df["home_team"] == equipo].copy()
     away = df[df["away_team"] == equipo].copy()
 
     general = pd.concat([
-        home.assign(pf=home["home_score"], pa=home["away_score"])[["season", "week", "pf", "pa"]],
-        away.assign(pf=away["away_score"], pa=away["home_score"])[["season", "week", "pf", "pa"]],
+        home.assign(pf=home["home_score"], pa=home["away_score"])[["season", "week", "gameday", "game_id", "pf", "pa"]],
+        away.assign(pf=away["away_score"], pa=away["home_score"])[["season", "week", "gameday", "game_id", "pf", "pa"]],
     ], ignore_index=True)
-    general = general.dropna(subset=["pf", "pa"]).sort_values(["season", "week"]).tail(ultimos_n)
+    general = general.dropna(subset=["pf", "pa"])
+    sort_cols = [c for c in ["season", "week", "gameday", "game_id"] if c in general.columns]
+    if sort_cols:
+        general = general.sort_values(sort_cols)
+    general = general.tail(ultimos_n)
 
     return {
         "general_pf": general["pf"].to_numpy(dtype=float),
         "general_pa": general["pa"].to_numpy(dtype=float),
-        "home_pf": home.dropna(subset=["home_score"]).tail(venue_n)["home_score"].to_numpy(dtype=float),
-        "home_pa": home.dropna(subset=["away_score"]).tail(venue_n)["away_score"].to_numpy(dtype=float),
-        "away_pf": away.dropna(subset=["away_score"]).tail(venue_n)["away_score"].to_numpy(dtype=float),
-        "away_pa": away.dropna(subset=["home_score"]).tail(venue_n)["home_score"].to_numpy(dtype=float),
+        "home_n": int(len(home.dropna(subset=["home_score", "away_score"]).tail(venue_n))),
+        "away_n": int(len(away.dropna(subset=["home_score", "away_score"]).tail(venue_n))),
     }
 
 
-def _combinar_muestras(base, venue):
-    base = np.asarray(base, dtype=float)
-    venue = np.asarray(venue, dtype=float)
-    if len(base) == 0:
-        return np.array([], dtype=float)
-    if len(venue) >= 3:
-        return np.concatenate([base, venue])
-    return base
-
-
 def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=None, n_simulaciones=None):
-    """Distribución empírica determinista basada en marcadores reales.
+    """Distribución empírica determinista basada en marcadores reales únicos.
 
-    `spread_local` conserva la semántica nflverse: +3 significa que el local es
-    favorito por 3; por ello cubre cuando margen_local > 3. No se usa RNG.
+    `spread_local` es el umbral de margen local: +3 significa que el local debe
+    ganar por más de 3 para cubrir. Esta semántica es la misma que usa producción
+    después de convertir home_spread de la casa con threshold=-home_spread.
     """
     if df_games is None or df_games.empty:
         return {"Disponible": False, "Motivo": "Sin histórico real"}
@@ -63,10 +57,10 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
     if len(h["general_pf"]) < 5 or len(a["general_pf"]) < 5:
         return {"Disponible": False, "Motivo": "Menos de 5 juegos reales por equipo"}
 
-    h_off = _combinar_muestras(h["general_pf"], h["home_pf"])
-    h_def = _combinar_muestras(h["general_pa"], h["home_pa"])
-    a_off = _combinar_muestras(a["general_pf"], a["away_pf"])
-    a_def = _combinar_muestras(a["general_pa"], a["away_pa"])
+    h_off = h["general_pf"]
+    h_def = h["general_pa"]
+    a_off = a["general_pf"]
+    a_def = a["general_pa"]
 
     score_h = ((h_off[:, None] + a_def[None, :]) / 2.0).reshape(-1)
     score_a = ((a_off[:, None] + h_def[None, :]) / 2.0).reshape(-1)
@@ -90,7 +84,7 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
             "Prob Push": round(float(np.sum(total == line) / n) * 100, 2),
         })
 
-    spread = {"Linea nflverse": spread_local, "Cubre Local": None, "Cubre Visita": None, "Push": None}
+    spread = {"Umbral margen local": spread_local, "Cubre Local": None, "Cubre Visita": None, "Push": None}
     if spread_local is not None and pd.notna(spread_local):
         line = float(spread_local)
         adjusted = margin - line
@@ -102,9 +96,11 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
 
     return {
         "Disponible": True,
-        "Metodo": "Distribucion empirica de marcadores reales",
+        "Metodo": "Distribucion empirica de marcadores reales unicos",
         "Muestras_Local": int(len(h_off)),
         "Muestras_Visita": int(len(a_off)),
+        "Venue_Local_N": h["home_n"],
+        "Venue_Visita_N": a["away_n"],
         "Proyeccion_Score": {
             local: round(float(np.mean(score_h)), 2),
             visita: round(float(np.mean(score_a)), 2),
