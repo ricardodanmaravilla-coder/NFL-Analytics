@@ -67,7 +67,6 @@ def grade(market, side, hs, aws, line):
 
 
 def add(rows, season, week, gid, market, side, p, mc, odd, other, hs, aws, line=0):
-    # Producción: ML positivo queda LEAN, no BET automático. Spread/Total no usan este guardrail.
     if market == 'ML':
         try:
             if float(odd) >= 0: return
@@ -77,8 +76,11 @@ def add(rows, season, week, gid, market, side, p, mc, odd, other, hs, aws, line=
     if x is None: return
     prob,d,edge,ev=x; win=grade(market,side,hs,aws,line)
     if win is None: return
+    role = None
+    if market == 'SPREAD':
+        role = 'FAVORITE' if float(line) < 0 else ('UNDERDOG' if float(line) > 0 else 'PICKEM')
     rows.append({'season':season,'week':week,'game_id':gid,'market':market,'side':side,
-                 'probability':prob,'mc_probability':mc,'edge':edge,'ev':ev,'odds':odd,
+                 'line':line,'spread_role':role,'probability':prob,'mc_probability':mc,'edge':edge,'ev':ev,'odds':odd,
                  'win':win,'return':d-1 if win else -1.0})
 
 
@@ -144,6 +146,11 @@ def main():
     print('\n=== NFL PRODUCTION ALL MARKETS WALK-FORWARD ===')
     for market,g in out.groupby('market'):
         print(market, {'n':len(g),'winrate':round(100*g.win.mean(),2),'roi':round(100*g['return'].mean(),2),'avg_p':round(g.probability.mean(),2)})
+    spreads=out[out.market=='SPREAD']
+    if not spreads.empty:
+        print('\nSPREAD FAVORITE / UNDERDOG')
+        for role,g in spreads.groupby('spread_role'):
+            print(role, {'n':len(g),'winrate':round(100*g.win.mean(),2),'roi':round(100*g['return'].mean(),2),'avg_p':round(g.probability.mean(),2),'avg_mc':round(g.mc_probability.mean(),2)})
     out['bin']=pd.cut(out.probability,[58,60,65,70,75,101],right=False,include_lowest=True)
     print('\nCALIBRATION BINS')
     print(out.groupby(['market','bin'],observed=True).agg(n=('win','size'),pred=('probability','mean'),actual=('win','mean'),roi=('return','mean')).to_string())
