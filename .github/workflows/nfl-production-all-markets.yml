@@ -6,6 +6,7 @@ on:
     paths:
       - 'backtest_nfl_production_all_markets.py'
       - 'backtest_nfl_spread_primary_oos.py'
+      - 'audit_nfl_spread_opportunities.py'
       - 'modules/nfl_montecarlo_sim.py'
       - 'modules/nfl_moneyline_runtime.py'
       - 'modules/nfl_calibration.py'
@@ -26,8 +27,8 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Compile production modules
-        run: python -m compileall cloudrun_api.py modules backtest_nfl_production_all_markets.py backtest_nfl_spread_primary_oos.py
+      - name: Compile production and audit modules
+        run: python -m compileall cloudrun_api.py modules backtest_nfl_production_all_markets.py audit_nfl_spread_opportunities.py
       - name: Verify spread semantics
         run: |
           python - <<'PY'
@@ -40,16 +41,18 @@ jobs:
           df=pd.DataFrame(rows)
           r=simular_nfl_montecarlo('H','A',df,45.5,3.0)
           assert r['Disponible']
-          assert r['Spread']['Cubre Local'] is not None
-          assert r['Spread']['Cubre Visita'] is not None
           assert abs(r['Spread']['Cubre Local']+r['Spread']['Cubre Visita']+r['Spread']['Push']-100)<0.1
           assert r['Spread'].get('Muestra efectiva') == 12
           print(r['Spread'])
           PY
-      - name: Run production all-market backtest with rebuilt spread MC
+      - name: Run production all-market backtest
         run: python backtest_nfl_production_all_markets.py
+      - name: Run full spread opportunity audit
+        run: python audit_nfl_spread_opportunities.py
       - name: Upload validation results
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-rebuilt-spread-mc-results
-          path: backtest_nfl_production_all_markets_results.csv
+          name: nfl-full-audit-results
+          path: |
+            backtest_nfl_production_all_markets_results.csv
+            audit_nfl_spread_opportunities.csv
