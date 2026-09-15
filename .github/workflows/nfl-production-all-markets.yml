@@ -1,0 +1,53 @@
+name: NFL Production All Markets Validation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backtest_nfl_production_all_markets.py'
+      - 'modules/nfl_montecarlo_sim.py'
+      - 'modules/nfl_moneyline_runtime.py'
+      - 'modules/nfl_calibration.py'
+      - '.github/workflows/nfl-production-all-markets.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Compile production modules
+        run: python -m compileall cloudrun_api.py modules backtest_nfl_production_all_markets.py
+      - name: Verify spread semantics
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
+          rows=[]
+          for w,(h,a) in enumerate([(30,20),(27,17),(24,14),(21,10),(35,21),(28,13)],1):
+              rows.append({'season':2025,'week':w,'gameday':f'2025-09-{w:02d}','game_id':f'h{w}','home_team':'H','away_team':'X','home_score':h,'away_score':a})
+              rows.append({'season':2025,'week':w,'gameday':f'2025-10-{w:02d}','game_id':f'a{w}','home_team':'Y','away_team':'A','home_score':a,'away_score':h})
+          df=pd.DataFrame(rows)
+          r=simular_nfl_montecarlo('H','A',df,45.5,3.0)
+          assert r['Disponible']
+          assert r['Spread']['Cubre Local'] is not None
+          assert r['Spread']['Cubre Visita'] is not None
+          assert abs(r['Spread']['Cubre Local']+r['Spread']['Cubre Visita']+r['Spread']['Push']-100)<0.1
+          print(r['Spread'])
+          PY
+      - name: Run all-market walk-forward
+        run: python backtest_nfl_production_all_markets.py
+      - name: Upload validation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-production-all-markets-results
+          path: backtest_nfl_production_all_markets_results.csv
