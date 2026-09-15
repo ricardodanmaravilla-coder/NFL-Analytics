@@ -43,12 +43,13 @@ jobs:
           assert r['Spread']['Cubre Local'] is not None
           assert r['Spread']['Cubre Visita'] is not None
           assert abs(r['Spread']['Cubre Local']+r['Spread']['Cubre Visita']+r['Spread']['Push']-100)<0.1
+          assert r['Spread'].get('Muestra efectiva') == 12
           print(r['Spread'])
           PY
-      - name: Run spread primary OOS experiment
-        run: python backtest_nfl_spread_primary_oos.py
+      - name: Run production all-market backtest with rebuilt spread MC
+        run: python backtest_nfl_production_all_markets.py
       - name: Upload validation results
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-spread-primary-oos-results
+          name: nfl-rebuilt-spread-mc-results
           path: backtest_nfl_production_all_markets_results.csv
