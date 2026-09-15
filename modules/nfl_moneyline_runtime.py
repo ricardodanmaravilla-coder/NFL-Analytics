@@ -10,10 +10,11 @@ from modules.nfl_pbp_engine import features_pbp_actuales
 class MoneylineRuntime:
     """Runtime de producción para margen/Moneyline y total de puntos.
 
-    Las probabilidades se calibran con residuales estrictamente OOS generados por
-    bloques temporales expanding-window. El modelo final sí se entrena con todo el
-    histórico permitido, pero ningún residual de calibración procede de una fila
-    usada para entrenar la predicción que lo originó.
+    Las probabilidades se calibran con predicciones y residuales estrictamente OOS
+    generados por bloques temporales expanding-window. Para margen se corrige además
+    la contracción hacia cero típica del Random Forest mediante una calibración afín
+    aprendida exclusivamente sobre esas predicciones OOS. Esto evita favorecer de
+    forma estructural al underdog cuando el favorito tiene un spread exigente.
     """
 
     def __init__(self):
@@ -24,6 +25,8 @@ class MoneylineRuntime:
         self.features_margen = []
         self.residuales_total = np.array([], dtype=float)
         self.residuales_margen = np.array([], dtype=float)
+        self.margin_calibration_intercept = 0.0
+        self.margin_calibration_slope = 1.0
         self.pbp_team_game = pd.DataFrame()
         self.usa_pbp = False
         self.is_trained = False
@@ -39,12 +42,12 @@ class MoneylineRuntime:
                                      random_state=43, n_jobs=1)
 
     @staticmethod
-    def _walkforward_residuals(X, y, model_factory, min_train=150, block_size=64):
-        """Residuales OOS de bloques cronológicos; nunca mezcla futuro en entrenamiento."""
+    def _walkforward_oos(X, y, model_factory, min_train=150, block_size=64):
+        """Predicciones/targets OOS cronológicos; nunca mezcla futuro en entrenamiento."""
         n = len(X)
         if n < min_train + 30:
-            return np.array([], dtype=float)
-        residuals = []
+            return np.array([], dtype=float), np.array([], dtype=float)
+        preds, actuals = [], []
         start = int(min_train)
         while start < n:
             end = min(n, start + int(block_size))
@@ -52,11 +55,35 @@ class MoneylineRuntime:
                 break
             m = model_factory()
             m.fit(X.iloc[:start], y.iloc[:start])
-            pred = m.predict(X.iloc[start:end])
-            residuals.extend((y.iloc[start:end].to_numpy(dtype=float) - pred).tolist())
+            pred = np.asarray(m.predict(X.iloc[start:end]), dtype=float)
+            actual = y.iloc[start:end].to_numpy(dtype=float)
+            mask = np.isfinite(pred) & np.isfinite(actual)
+            preds.extend(pred[mask].tolist())
+            actuals.extend(actual[mask].tolist())
             start = end
-        r = np.asarray(residuals, dtype=float)
-        return r[np.isfinite(r)]
+        return np.asarray(preds, dtype=float), np.asarray(actuals, dtype=float)
+
+    @classmethod
+    def _walkforward_residuals(cls, X, y, model_factory, min_train=150, block_size=64):
+        pred, actual = cls._walkforward_oos(X, y, model_factory, min_train, block_size)
+        return actual - pred
+
+    @staticmethod
+    def _fit_affine_oos(pred, actual):
+        """Ajusta actual ~= intercept + slope*pred usando solo pares OOS."""
+        pred = np.asarray(pred, dtype=float)
+        actual = np.asarray(actual, dtype=float)
+        mask = np.isfinite(pred) & np.isfinite(actual)
+        pred, actual = pred[mask], actual[mask]
+        if len(pred) < 30 or float(np.std(pred)) < 1e-9:
+            return 0.0, 1.0
+        slope, intercept = np.polyfit(pred, actual, 1)
+        if not np.isfinite(slope) or not np.isfinite(intercept):
+            return 0.0, 1.0
+        # Guardrail amplio contra calibradores patológicos; no fuerza favoritos.
+        slope = float(np.clip(slope, 0.5, 2.0))
+        intercept = float(np.clip(intercept, -7.0, 7.0))
+        return intercept, slope
 
     @staticmethod
     def _pbp_seguro_para_games(df_games, df_pbp_team_game=None):
@@ -94,8 +121,17 @@ class MoneylineRuntime:
         Xm = margin_df[self.features_margen]
         ym = margin_df["margen_local"]
 
-        self.residuales_total = self._walkforward_residuals(Xt, yt, self._new_total_model)
-        self.residuales_margen = self._walkforward_residuals(Xm, ym, self._new_margin_model)
+        total_pred_oos, total_actual_oos = self._walkforward_oos(Xt, yt, self._new_total_model)
+        margin_pred_oos, margin_actual_oos = self._walkforward_oos(Xm, ym, self._new_margin_model)
+        if len(total_pred_oos) < 30 or len(margin_pred_oos) < 30:
+            return False
+
+        self.residuales_total = total_actual_oos - total_pred_oos
+        intercept, slope = self._fit_affine_oos(margin_pred_oos, margin_actual_oos)
+        self.margin_calibration_intercept = intercept
+        self.margin_calibration_slope = slope
+        calibrated_margin_oos = intercept + slope * margin_pred_oos
+        self.residuales_margen = margin_actual_oos - calibrated_margin_oos
         if len(self.residuales_total) < 30 or len(self.residuales_margen) < 30:
             return False
 
@@ -144,17 +180,21 @@ class MoneylineRuntime:
             return None
 
         total = float(self.modelo_puntos_totales.predict(Xt)[0])
-        margin = float(self.modelo_margen.predict(Xm)[0])
+        raw_margin = float(self.modelo_margen.predict(Xm)[0])
+        margin = self.margin_calibration_intercept + self.margin_calibration_slope * raw_margin
         sigma_total = float(np.std(self.residuales_total, ddof=1)) if len(self.residuales_total) >= 20 else None
         sigma_margin = float(np.std(self.residuales_margen, ddof=1)) if len(self.residuales_margen) >= 20 else None
         return {
             "ML_Puntos_Totales_Esperados": round(total, 2),
-            "ML_Margen_Local_Esperado": round(margin, 2),
+            "ML_Margen_Local_Esperado": round(float(margin), 2),
+            "ML_Margen_Local_Raw": round(raw_margin, 2),
+            "Margen_Calibration_Intercept": round(self.margin_calibration_intercept, 4),
+            "Margen_Calibration_Slope": round(self.margin_calibration_slope, 4),
             "Sigma_Total_OOS": None if sigma_total is None else round(sigma_total, 3),
             "Sigma_Margen_OOS": None if sigma_margin is None else round(sigma_margin, 3),
             "Usa_PBP_Real": bool(self.usa_pbp),
             "PBP_Aplicado_A": "Margen/Moneyline" if self.usa_pbp else "No disponible",
-            "Calibracion": "expanding_walkforward_oos",
+            "Calibracion": "expanding_walkforward_oos+affine_margin_oos",
             "N_Residuos_Total": int(len(self.residuales_total)),
             "N_Residuos_Margen": int(len(self.residuales_margen)),
         }
