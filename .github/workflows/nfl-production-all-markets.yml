@@ -16,9 +16,8 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    # The expanding-window OOS calibration intentionally retrains multiple
-    # temporal folds. The previous 30-minute cap cancelled a healthy run at
-    # 29m41s, so give the validation enough room without changing model logic.
+    # Expanding-window OOS calibration retrains multiple temporal folds.
+    # Keep a 90-minute ceiling so a fresh run from current main can finish.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
