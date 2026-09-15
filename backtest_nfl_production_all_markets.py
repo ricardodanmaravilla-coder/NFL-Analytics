@@ -59,7 +59,6 @@ def grade(market, side, hs, aws, line):
         if hs==aws: return None
         return int((side=='H' and hs>aws) or (side=='A' and aws>hs))
     if market=='SPREAD':
-        # line es la línea de apuesta de la casa: home -3 / away +3.
         adj=(margin+line) if side=='H' else (-margin+line)
     else:
         adj=(total-line) if side=='O' else (line-total)
@@ -68,6 +67,12 @@ def grade(market, side, hs, aws, line):
 
 
 def add(rows, season, week, gid, market, side, p, mc, odd, other, hs, aws, line=0):
+    # Producción: ML positivo queda LEAN, no BET automático. Spread/Total no usan este guardrail.
+    if market == 'ML':
+        try:
+            if float(odd) >= 0: return
+        except Exception:
+            return
     x=accepted(p,mc,odd,other)
     if x is None: return
     prob,d,edge,ev=x; win=grade(market,side,hs,aws,line)
@@ -106,7 +111,6 @@ def main():
                 if not pred: continue
                 spread_line=pd.to_numeric(g.get('spread_line'),errors='coerce')
                 total_line=pd.to_numeric(g.get('total_line'),errors='coerce')
-                # nflverse spread_line: positivo = favorito local por esa cantidad.
                 threshold=None if pd.isna(spread_line) else float(spread_line)
                 emp=simular_nfl_montecarlo(home,away,past,None if pd.isna(total_line) else float(total_line),threshold)
                 if not emp.get('Disponible'): continue
@@ -114,17 +118,14 @@ def main():
                 eh,ea=norm2(emp['Moneyline']['Gana Local'],emp['Moneyline']['Gana Visita'])
                 elo_h=100*elo.calcular_probabilidad_elo(elo.ratings.get(home,1500),elo.ratings.get(away,1500))
                 hm,am=g.get('home_moneyline'),g.get('away_moneyline')
-                # ML reproduce el guardrail adicional Elo+MC.
                 if not pd.isna(hm) and not pd.isna(am) and ph is not None and eh is not None:
                     if max(ph,elo_h,eh)-min(ph,elo_h,eh)<=MAX_DISAGREE and all((x>=50)==(ph>=50) for x in [elo_h,eh]):
                         add(rows,season,week,g.get('game_id'),'ML','H',ph,eh,hm,am,float(hs),float(aws))
                     if max(pa,100-elo_h,ea)-min(pa,100-elo_h,ea)<=MAX_DISAGREE and all((x>=50)==(pa>=50) for x in [100-elo_h,ea]):
                         add(rows,season,week,g.get('game_id'),'ML','A',pa,ea,am,hm,float(hs),float(aws))
-                # Spread: convertir línea histórica nflverse al formato de apuesta.
                 if threshold is not None:
                     sph,spa=empirical_residual_two_way(pred['ML_Margen_Local_Esperado'],threshold,model.residuales_margen)
                     mch=emp['Spread']['Cubre Local']; mca=emp['Spread']['Cubre Visita']
-                    # nflverse conserva precios históricos home/away spread si existen.
                     sho=g.get('home_spread_odds'); sao=g.get('away_spread_odds')
                     if not pd.isna(sho) and not pd.isna(sao):
                         add(rows,season,week,g.get('game_id'),'SPREAD','H',sph,mch,sho,sao,float(hs),float(aws),-threshold)
