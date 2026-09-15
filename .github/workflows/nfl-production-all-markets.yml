@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'backtest_nfl_production_all_markets.py'
+      - 'backtest_nfl_spread_primary_oos.py'
       - 'modules/nfl_montecarlo_sim.py'
       - 'modules/nfl_moneyline_runtime.py'
       - 'modules/nfl_calibration.py'
@@ -16,8 +17,6 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    # Expanding-window OOS calibration retrains multiple temporal folds.
-    # Keep a 90-minute ceiling so a fresh run from current main can finish.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Compile production modules
-        run: python -m compileall cloudrun_api.py modules backtest_nfl_production_all_markets.py
+        run: python -m compileall cloudrun_api.py modules backtest_nfl_production_all_markets.py backtest_nfl_spread_primary_oos.py
       - name: Verify spread semantics
         run: |
           python - <<'PY'
@@ -46,10 +45,10 @@ jobs:
           assert abs(r['Spread']['Cubre Local']+r['Spread']['Cubre Visita']+r['Spread']['Push']-100)<0.1
           print(r['Spread'])
           PY
-      - name: Run all-market walk-forward
-        run: python backtest_nfl_production_all_markets.py
+      - name: Run spread primary OOS experiment
+        run: python backtest_nfl_spread_primary_oos.py
       - name: Upload validation results
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-production-all-markets-results
+          name: nfl-spread-primary-oos-results
           path: backtest_nfl_production_all_markets_results.csv
