@@ -10,28 +10,16 @@ from modules.nfl_pbp_engine import features_pbp_actuales
 class MoneylineRuntime:
     """Runtime de producción para margen/Moneyline y total de puntos.
 
-    El margen usa PBP real cuando está disponible. El total conserva únicamente
-    las features base, igual que PredictorNFL_ML, porque ese fue el camino validado
-    fuera de muestra para O/U. Ambos modelos guardan residuales OOS para convertir
-    sus proyecciones a probabilidades empíricas sin asumir una Normal.
+    Las probabilidades se calibran con residuales estrictamente OOS generados por
+    bloques temporales expanding-window. El modelo final sí se entrena con todo el
+    histórico permitido, pero ningún residual de calibración procede de una fila
+    usada para entrenar la predicción que lo originó.
     """
 
     def __init__(self):
         self.base = PredictorNFL_ML()
-        self.modelo_puntos_totales = RandomForestRegressor(
-            n_estimators=250,
-            max_depth=9,
-            min_samples_leaf=6,
-            random_state=42,
-            n_jobs=1,
-        )
-        self.modelo_margen = RandomForestRegressor(
-            n_estimators=250,
-            max_depth=9,
-            min_samples_leaf=6,
-            random_state=43,
-            n_jobs=1,
-        )
+        self.modelo_puntos_totales = self._new_total_model()
+        self.modelo_margen = self._new_margin_model()
         self.features_total = []
         self.features_margen = []
         self.residuales_total = np.array([], dtype=float)
@@ -41,8 +29,37 @@ class MoneylineRuntime:
         self.is_trained = False
 
     @staticmethod
+    def _new_total_model():
+        return RandomForestRegressor(n_estimators=250, max_depth=9, min_samples_leaf=6,
+                                     random_state=42, n_jobs=1)
+
+    @staticmethod
+    def _new_margin_model():
+        return RandomForestRegressor(n_estimators=250, max_depth=9, min_samples_leaf=6,
+                                     random_state=43, n_jobs=1)
+
+    @staticmethod
+    def _walkforward_residuals(X, y, model_factory, min_train=150, block_size=64):
+        """Residuales OOS de bloques cronológicos; nunca mezcla futuro en entrenamiento."""
+        n = len(X)
+        if n < min_train + 30:
+            return np.array([], dtype=float)
+        residuals = []
+        start = int(min_train)
+        while start < n:
+            end = min(n, start + int(block_size))
+            if end - start <= 0:
+                break
+            m = model_factory()
+            m.fit(X.iloc[:start], y.iloc[:start])
+            pred = m.predict(X.iloc[start:end])
+            residuals.extend((y.iloc[start:end].to_numpy(dtype=float) - pred).tolist())
+            start = end
+        r = np.asarray(residuals, dtype=float)
+        return r[np.isfinite(r)]
+
+    @staticmethod
     def _pbp_seguro_para_games(df_games, df_pbp_team_game=None):
-        """Obtiene PBP sólo para partidos ya presentes en el histórico permitido."""
         pbp = df_pbp_team_game.copy() if df_pbp_team_game is not None else pd.DataFrame()
         if pbp.empty:
             try:
@@ -63,9 +80,7 @@ class MoneylineRuntime:
 
         base_features = self.base._base_feature_names()
         pbp_features = self.base._pbp_feature_names()
-        self.usa_pbp = bool(
-            not self.pbp_team_game.empty and all(c in df.columns for c in pbp_features)
-        )
+        self.usa_pbp = bool(not self.pbp_team_game.empty and all(c in df.columns for c in pbp_features))
         self.features_total = base_features
         self.features_margen = base_features + (pbp_features if self.usa_pbp else [])
 
@@ -76,22 +91,17 @@ class MoneylineRuntime:
 
         Xt = total_df[self.features_total]
         yt = total_df["puntos_totales"]
-        cut_t = max(150, int(len(total_df) * 0.80))
-        if cut_t < len(total_df) - 30:
-            self.modelo_puntos_totales.fit(Xt.iloc[:cut_t], yt.iloc[:cut_t])
-            self.residuales_total = (
-                yt.iloc[cut_t:] - self.modelo_puntos_totales.predict(Xt.iloc[cut_t:])
-            ).to_numpy()
-        self.modelo_puntos_totales.fit(Xt, yt)
-
         Xm = margin_df[self.features_margen]
         ym = margin_df["margen_local"]
-        cut_m = max(150, int(len(margin_df) * 0.80))
-        if cut_m < len(margin_df) - 30:
-            self.modelo_margen.fit(Xm.iloc[:cut_m], ym.iloc[:cut_m])
-            self.residuales_margen = (
-                ym.iloc[cut_m:] - self.modelo_margen.predict(Xm.iloc[cut_m:])
-            ).to_numpy()
+
+        self.residuales_total = self._walkforward_residuals(Xt, yt, self._new_total_model)
+        self.residuales_margen = self._walkforward_residuals(Xm, ym, self._new_margin_model)
+        if len(self.residuales_total) < 30 or len(self.residuales_margen) < 30:
+            return False
+
+        self.modelo_puntos_totales = self._new_total_model()
+        self.modelo_margen = self._new_margin_model()
+        self.modelo_puntos_totales.fit(Xt, yt)
         self.modelo_margen.fit(Xm, ym)
 
         self.is_trained = True
@@ -135,14 +145,8 @@ class MoneylineRuntime:
 
         total = float(self.modelo_puntos_totales.predict(Xt)[0])
         margin = float(self.modelo_margen.predict(Xm)[0])
-        sigma_total = (
-            float(np.std(self.residuales_total, ddof=1))
-            if len(self.residuales_total) >= 20 else None
-        )
-        sigma_margin = (
-            float(np.std(self.residuales_margen, ddof=1))
-            if len(self.residuales_margen) >= 20 else None
-        )
+        sigma_total = float(np.std(self.residuales_total, ddof=1)) if len(self.residuales_total) >= 20 else None
+        sigma_margin = float(np.std(self.residuales_margen, ddof=1)) if len(self.residuales_margen) >= 20 else None
         return {
             "ML_Puntos_Totales_Esperados": round(total, 2),
             "ML_Margen_Local_Esperado": round(margin, 2),
@@ -150,4 +154,7 @@ class MoneylineRuntime:
             "Sigma_Margen_OOS": None if sigma_margin is None else round(sigma_margin, 3),
             "Usa_PBP_Real": bool(self.usa_pbp),
             "PBP_Aplicado_A": "Margen/Moneyline" if self.usa_pbp else "No disponible",
+            "Calibracion": "expanding_walkforward_oos",
+            "N_Residuos_Total": int(len(self.residuales_total)),
+            "N_Residuos_Margen": int(len(self.residuales_margen)),
         }
