@@ -4,13 +4,11 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'backtest_nfl_spread_direct_ats.py'
-      - 'backtest_nfl_spread_ats_adaptive.py'
+      - 'backtest_nfl_spread_market_residual.py'
       - '.github/workflows/nfl-production-all-markets.yml'
 
 permissions:
   contents: read
-
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -23,15 +21,12 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Compile adaptive ATS
-        run: python -m compileall modules backtest_nfl_spread_direct_ats.py backtest_nfl_spread_ats_adaptive.py
-      - name: Run adaptive ATS validation
-        run: python backtest_nfl_spread_ats_adaptive.py
-      - name: Upload adaptive ATS
+      - name: Compile market residual ATS
+        run: python -m compileall modules backtest_nfl_spread_market_residual.py
+      - name: Run market residual ATS
+        run: python backtest_nfl_spread_market_residual.py
+      - name: Upload market residual ATS
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-ats-adaptive-results
-          path: |
-            backtest_nfl_spread_direct_ats_results.csv
-            backtest_nfl_spread_ats_adaptive_all.csv
-            backtest_nfl_spread_ats_adaptive_results.csv
+          name: nfl-market-residual-ats
+          path: backtest_nfl_spread_market_residual_results.csv
