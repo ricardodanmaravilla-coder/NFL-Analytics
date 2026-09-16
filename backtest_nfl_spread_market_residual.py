@@ -47,7 +47,6 @@ def main():
       for w in sorted(pd.to_numeric(raw[raw.season==s].week,errors='coerce').dropna().astype(int).unique()):
         past=historico_antes(raw,s,w);pp=historico_antes(pbp,s,w) if not pbp.empty else pd.DataFrame();b,tr,cols=training(past,pp);tr=tr.dropna(subset=cols+['ats_margin'])
         if len(tr)<250:continue
-        # OOS residual distribution from temporally ordered expanding blocks inside past data.
         cut=max(200,int(len(tr)*.70));fit=tr.iloc[:cut];cal=tr.iloc[cut:]
         if len(cal)<MIN_RESID:continue
         m0=RandomForestRegressor(n_estimators=300,max_depth=8,min_samples_leaf=10,random_state=91,n_jobs=1).fit(fit[cols],fit.ats_margin)
@@ -68,7 +67,7 @@ def main():
             cover=float(g.result)-float(line);cover=cover if side=='H' else -cover
             if abs(cover)<1e-9:continue
             win=int(cover>0);role='FAVORITE' if ln<0 else ('UNDERDOG' if ln>0 else 'PICKEM')
-            rows.append(dict(season=s,week=w,game_id=g.game_id,side=side,role=role,line=ln,probability=prob,edge=edge,ev=ev,odds=odd,pred_ats_margin=mu,resid_n=len(resid),win=win,return=dec(odd)-1 if win else -1.))
+            rows.append({'season':s,'week':w,'game_id':g.game_id,'side':side,'role':role,'line':ln,'probability':prob,'edge':edge,'ev':ev,'odds':odd,'pred_ats_margin':mu,'resid_n':len(resid),'win':win,'return':dec(odd)-1 if win else -1.})
     o=pd.DataFrame(rows);o.to_csv('backtest_nfl_spread_market_residual_results.csv',index=False)
     if o.empty:raise SystemExit('No picks')
     print('\n=== MARKET RESIDUAL ATS ===');print({'n':len(o),'winrate':round(100*o.win.mean(),2),'roi':round(100*o['return'].mean(),2),'avg_p':round(o.probability.mean(),2)})
