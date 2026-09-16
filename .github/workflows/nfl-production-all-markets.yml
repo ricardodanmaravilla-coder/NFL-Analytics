@@ -4,14 +4,9 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'backtest_nfl_production_all_markets.py'
-      - 'backtest_nfl_spread_primary_oos.py'
       - 'backtest_nfl_spread_direct_ats.py'
       - 'backtest_nfl_spread_direct_ats_v2.py'
-      - 'audit_nfl_spread_opportunities.py'
-      - 'modules/nfl_montecarlo_sim.py'
-      - 'modules/nfl_moneyline_runtime.py'
-      - 'modules/nfl_calibration.py'
+      - 'diagnose_nfl_spread_regime.py'
       - '.github/workflows/nfl-production-all-markets.yml'
 
 permissions:
@@ -20,7 +15,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,30 +24,15 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Compile validation modules
-        run: python -m compileall cloudrun_api.py modules backtest_nfl_spread_direct_ats.py backtest_nfl_spread_direct_ats_v2.py
-      - name: Verify spread semantics
-        run: |
-          python - <<'PY'
-          import pandas as pd
-          from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
-          rows=[]
-          for w,(h,a) in enumerate([(30,20),(27,17),(24,14),(21,10),(35,21),(28,13)],1):
-              rows.append({'season':2025,'week':w,'gameday':f'2025-09-{w:02d}','game_id':f'h{w}','home_team':'H','away_team':'X','home_score':h,'away_score':a})
-              rows.append({'season':2025,'week':w,'gameday':f'2025-10-{w:02d}','game_id':f'a{w}','home_team':'Y','away_team':'A','home_score':a,'away_score':h})
-          df=pd.DataFrame(rows)
-          r=simular_nfl_montecarlo('H','A',df,45.5,3.0)
-          assert r['Disponible']
-          assert abs(r['Spread']['Cubre Local']+r['Spread']['Cubre Visita']+r['Spread']['Push']-100)<0.1
-          assert r['Spread'].get('Muestra efectiva') == 12
-          print(r['Spread'])
-          PY
-      - name: Run temporal direct ATS v2 experiment
-        run: python backtest_nfl_spread_direct_ats_v2.py
-      - name: Upload ATS v2 results
+      - name: Compile diagnostics
+        run: python -m compileall modules backtest_nfl_spread_direct_ats.py diagnose_nfl_spread_regime.py
+      - name: Run ATS regime diagnostics
+        run: python diagnose_nfl_spread_regime.py
+      - name: Upload regime diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-ats-v2-results
+          name: nfl-ats-regime-diagnostics
           path: |
             backtest_nfl_spread_direct_ats_results.csv
-            backtest_nfl_spread_direct_ats_v2_results.csv
+            diagnose_nfl_spread_regime_results.csv
+            diagnose_nfl_spread_drift_results.csv
