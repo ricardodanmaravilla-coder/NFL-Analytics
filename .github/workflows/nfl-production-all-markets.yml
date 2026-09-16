@@ -6,6 +6,7 @@ on:
     paths:
       - 'backtest_nfl_production_all_markets.py'
       - 'backtest_nfl_spread_primary_oos.py'
+      - 'backtest_nfl_spread_direct_ats.py'
       - 'audit_nfl_spread_opportunities.py'
       - 'modules/nfl_montecarlo_sim.py'
       - 'modules/nfl_moneyline_runtime.py'
@@ -28,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Compile production and audit modules
-        run: python -m compileall cloudrun_api.py modules backtest_nfl_production_all_markets.py audit_nfl_spread_opportunities.py
+        run: python -m compileall cloudrun_api.py modules backtest_nfl_production_all_markets.py audit_nfl_spread_opportunities.py backtest_nfl_spread_direct_ats.py
       - name: Verify spread semantics
         run: |
           python - <<'PY'
@@ -45,6 +46,8 @@ jobs:
           assert r['Spread'].get('Muestra efectiva') == 12
           print(r['Spread'])
           PY
+      - name: Run direct ATS spread experiment
+        run: python backtest_nfl_spread_direct_ats.py
       - name: Run production all-market backtest
         run: python backtest_nfl_production_all_markets.py
       - name: Run full spread opportunity audit
@@ -54,5 +57,6 @@ jobs:
         with:
           name: nfl-full-audit-results
           path: |
+            backtest_nfl_spread_direct_ats_results.csv
             backtest_nfl_production_all_markets_results.csv
             audit_nfl_spread_opportunities.csv
