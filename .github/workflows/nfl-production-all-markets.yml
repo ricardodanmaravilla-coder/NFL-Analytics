@@ -5,8 +5,7 @@ on:
   push:
     paths:
       - 'backtest_nfl_spread_direct_ats.py'
-      - 'backtest_nfl_spread_ats_calibrated.py'
-      - 'diagnose_nfl_ats_calibration.py'
+      - 'backtest_nfl_spread_ats_adaptive.py'
       - '.github/workflows/nfl-production-all-markets.yml'
 
 permissions:
@@ -24,15 +23,15 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Compile calibration audit
-        run: python -m compileall modules backtest_nfl_spread_direct_ats.py diagnose_nfl_ats_calibration.py
-      - name: Run calibration suppression audit
-        run: python diagnose_nfl_ats_calibration.py
-      - name: Upload calibration audit
+      - name: Compile adaptive ATS
+        run: python -m compileall modules backtest_nfl_spread_direct_ats.py backtest_nfl_spread_ats_adaptive.py
+      - name: Run adaptive ATS validation
+        run: python backtest_nfl_spread_ats_adaptive.py
+      - name: Upload adaptive ATS
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-ats-calibration-audit
+          name: nfl-ats-adaptive-results
           path: |
             backtest_nfl_spread_direct_ats_results.csv
-            diagnose_nfl_ats_calibration_all.csv
-            diagnose_nfl_ats_calibration_summary.csv
+            backtest_nfl_spread_ats_adaptive_all.csv
+            backtest_nfl_spread_ats_adaptive_results.csv
