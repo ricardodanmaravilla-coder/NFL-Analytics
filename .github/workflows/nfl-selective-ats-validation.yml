@@ -1,0 +1,28 @@
+name: NFL Selective ATS v7 Validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backtest_nfl_spread_selective_signal.py'
+      - '.github/workflows/nfl-selective-ats-validation.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall modules backtest_nfl_spread_selective_signal.py
+      - run: python backtest_nfl_spread_selective_signal.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfl-selective-ats-v7
+          path: |
+            backtest_nfl_spread_selective_signal_all.csv
+            backtest_nfl_spread_selective_signal_picks.csv
