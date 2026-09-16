@@ -1,0 +1,30 @@
+name: NFL Market Residual ATS Validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backtest_nfl_spread_market_residual.py'
+      - '.github/workflows/nfl-market-residual-validation.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Compile
+        run: python -m compileall modules backtest_nfl_spread_market_residual.py
+      - name: Run market residual ATS
+        run: python backtest_nfl_spread_market_residual.py
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-market-residual-ats
+          path: backtest_nfl_spread_market_residual_results.csv
