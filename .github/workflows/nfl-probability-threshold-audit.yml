@@ -1,0 +1,25 @@
+name: NFL Probability Threshold Audit
+
+on:
+  pull_request:
+    paths:
+      - 'audit_nfl_probability_thresholds.py'
+      - 'backtest_nfl_walkforward.py'
+      - 'modules/**'
+      - '.github/workflows/nfl-probability-threshold-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements-cloudrun.txt
+      - name: Compile audit
+        run: python -m py_compile audit_nfl_probability_thresholds.py backtest_nfl_walkforward.py
+      - name: Run threshold walk-forward audit
+        run: python audit_nfl_probability_thresholds.py
