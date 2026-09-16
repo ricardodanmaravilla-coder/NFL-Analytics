@@ -1,0 +1,26 @@
+name: NFL Market Guard ATS Validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backtest_nfl_spread_market_guard.py'
+      - '.github/workflows/nfl-market-guard-validation.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python -m compileall backtest_nfl_spread_market_guard.py
+      - run: python backtest_nfl_spread_market_guard.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfl-market-guard-v6
+          path: backtest_nfl_spread_market_guard_all.csv
