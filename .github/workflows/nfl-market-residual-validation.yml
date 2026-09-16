@@ -19,14 +19,14 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Compile
+      - name: Compile ATS v5
         run: python -m compileall modules backtest_nfl_spread_market_residual.py
-      - name: Run market residual ATS
+      - name: Run market baseline correction ATS v5
         run: python backtest_nfl_spread_market_residual.py
-      - name: Upload results
+      - name: Upload ATS v5 results
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-market-residual-ats-v4
+          name: nfl-market-baseline-ats-v5
           path: |
             backtest_nfl_spread_market_residual_results.csv
             backtest_nfl_spread_market_residual_all.csv
