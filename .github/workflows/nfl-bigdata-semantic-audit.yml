@@ -1,0 +1,26 @@
+name: NFL Big Data Semantic Audit
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'audit_nfl_bigdata_semantics.py'
+      - '.github/workflows/nfl-bigdata-semantic-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall modules audit_nfl_bigdata_semantics.py
+      - run: python audit_nfl_bigdata_semantics.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfl-bigdata-semantic-audit
+          path: audit_nfl_bigdata_semantics.json
