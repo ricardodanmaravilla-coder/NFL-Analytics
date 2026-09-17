@@ -13,6 +13,10 @@ permissions:
   contents: read
 jobs:
   validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        season: [2023, 2024, 2025]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -25,10 +29,12 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile production validation
         run: python -m compileall modules backtest_nfl_production_all_markets.py
-      - name: Run production all-markets walk-forward 2023-2025
+      - name: Run rigorous walk-forward for season
+        env:
+          NFL_VALIDATION_SEASON: ${{ matrix.season }}
         run: python backtest_nfl_production_all_markets.py
-      - name: Upload validation results
+      - name: Upload season validation results
         uses: actions/upload-artifact@v4
         with:
-          name: nfl-production-all-markets-results
+          name: nfl-production-all-markets-${{ matrix.season }}
           path: backtest_nfl_production_all_markets_results.csv
