@@ -1,0 +1,27 @@
+name: NFL Production Safety
+
+on:
+  push:
+    paths:
+      - 'cloudrun_api.py'
+      - 'modules/nfl_moneyline_runtime.py'
+      - 'modules/nfl_pbp_engine.py'
+      - 'test_nfl_production_safety.py'
+      - 'test_nfl_pbp_asof.py'
+      - '.github/workflows/nfl-production-safety.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements-cloudrun.txt pytest
+      - name: Compile production modules
+        run: python -m py_compile cloudrun_api.py modules/nfl_moneyline_runtime.py modules/nfl_pbp_engine.py
+      - name: Run production safety regressions
+        run: pytest -q test_nfl_production_safety.py test_nfl_pbp_asof.py
