@@ -1,0 +1,26 @@
+name: NFL Big Data Root Audit
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'audit_nfl_bigdata_root.py'
+      - '.github/workflows/nfl-bigdata-root-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall modules audit_nfl_bigdata_root.py
+      - run: python audit_nfl_bigdata_root.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfl-bigdata-root-audit
+          path: audit_nfl_bigdata_root.json
