@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 
 import duckdb
 import numpy as np
@@ -52,7 +53,6 @@ def construir_lake_nflverse(seasons, raw_dir=DEFAULT_RAW_PARQUET, team_dir=DEFAU
         for base in (raw_dir, team_dir):
             season_dir = base / f"season={season}"
             if season_dir.exists():
-                import shutil
                 shutil.rmtree(season_dir)
     aggregates = []
     for season in requested_seasons:
