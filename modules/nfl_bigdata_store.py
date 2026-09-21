@@ -45,8 +45,17 @@ def construir_lake_nflverse(seasons, raw_dir=DEFAULT_RAW_PARQUET, team_dir=DEFAU
     team_dir = Path(team_dir)
     raw_dir.mkdir(parents=True, exist_ok=True)
     team_dir.mkdir(parents=True, exist_ok=True)
+    # Rebuild only the requested seasons. Remove stale partitions first so a
+    # previous run cannot leave extra rows that disagree with the fresh CSV.
+    requested_seasons = sorted({int(s) for s in seasons})
+    for season in requested_seasons:
+        for base in (raw_dir, team_dir):
+            season_dir = base / f"season={season}"
+            if season_dir.exists():
+                import shutil
+                shutil.rmtree(season_dir)
     aggregates = []
-    for season in sorted({int(s) for s in seasons}):
+    for season in requested_seasons:
         pbp = nfl.import_pbp_data([season], downcast=True, cache=False, include_participation=False)
         if pbp is None or pbp.empty:
             raise RuntimeError(f"nflverse no devolvió PBP para {season}")
