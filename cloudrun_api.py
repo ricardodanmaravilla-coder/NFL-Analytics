@@ -133,9 +133,9 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
 
 def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, odd_other,
                      bankroll=DEFAULT_BANKROLL, book=None, source=None, fetched_at=None, auto_bet=None):
-    """Spread and Totals are informational-only until each market shows a stable OOS edge."""
+    """All validated markets remain visible as recommendations; only BET actions are synced as wagers."""
     if auto_bet is None:
-        auto_bet = str(market).upper() not in {"SPREAD", "TOTAL"}
+        auto_bet = True
     return _build_candidate(game, pick, primary_prob, [mc_prob], mc_prob, odd_self, odd_other, bankroll,
         auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at)
 
@@ -176,8 +176,8 @@ def health():
         "status": "ok", "service": "NFL Analytics Cloud Run", "version": "3.9",
         "kickoff_weather": True, "live_odds_provider": "TheRundown",
         "markets": ["moneyline", "spread", "total"],
-        "market_policy": "ML may auto-BET when filters pass; SPREAD/TOTAL are LEAN/informational only pending stable OOS validation",
-        "spread_auto_bet": False, "total_auto_bet": False,
+        "market_policy": "ML/SPREAD/TOTAL remain enabled as recommendations when production filters pass",
+        "spread_auto_bet": True, "total_auto_bet": True,
         "pbp_asof_cutoff": True,
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
@@ -270,12 +270,11 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         bets = [p for p in picks if p["action"] == "BET"]
         leans = [p for p in picks if p["action"] == "LEAN"]
         # Defense-in-depth: SPREAD can never reach Sheet sync even if a future caller mislabels it.
-        bets = [p for p in bets if str(p.get("market", "")).upper() not in {"SPREAD", "TOTAL"}]
         sheet_sync = sync_bets(bets, season, week, bankroll)
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
             "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "1/4 Kelly puro; máximo 3% del bankroll por BET",
             "markets": ["ML", "SPREAD", "TOTAL"],
-            "market_policy": "ML: filtros de producción; SPREAD/TOTAL: LEAN informativo, stake $0 y nunca se sincronizan al Sheet",
+            "market_policy": "ML/SPREAD/TOTAL: recomendación habilitada cuando pasan filtros de producción",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
             "bets": bets, "leans": leans, "diagnostics": diagnostics, "sheet_sync": sheet_sync, "settlement": settlement}
     except HTTPException:
