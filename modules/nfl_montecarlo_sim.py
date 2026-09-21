@@ -84,26 +84,26 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
     a_off = a["general_pf"]
     a_def = a["general_pa"]
 
-    # Se conserva exactamente el método anterior para ML y Totales.
-    score_h = ((h_off[:, None] + a_def[None, :]) / 2.0).reshape(-1)
-    score_a = ((a_off[:, None] + h_def[None, :]) / 2.0).reshape(-1)
-    sh = score_h[:, None]
-    sa = score_a[None, :]
-    total = sh + sa
-    margin_legacy = sh - sa
-    n = float(total.size)
+    # Distribuciones empíricas sin producto cartesiano de pseudo-partidos.
+    # Cada observación histórica aporta una sola vez a la muestra efectiva.
+    score_h = np.concatenate([h_off, a_def]) / 2.0
+    score_a = np.concatenate([a_off, h_def]) / 2.0
+    margin_dist = _spread_distribution(h["general_margin"], a["general_margin"])
+    total_dist = np.concatenate([h_off + h_def, a_off + a_def])
 
-    p_home = float(np.sum(margin_legacy > 0) / n)
-    p_away = float(np.sum(margin_legacy < 0) / n)
-    p_tie = float(np.sum(margin_legacy == 0) / n)
+    n_margin = float(margin_dist.size)
+    n_total = float(total_dist.size)
+    p_home = float(np.sum(margin_dist > 0) / n_margin)
+    p_away = float(np.sum(margin_dist < 0) / n_margin)
+    p_tie = float(np.sum(margin_dist == 0) / n_margin)
 
     ou = {"Linea": linea_ou, "Prob Over": None, "Prob Under": None, "Prob Push": None}
     if linea_ou is not None and pd.notna(linea_ou):
         line = float(linea_ou)
         ou.update({
-            "Prob Over": round(float(np.sum(total > line) / n) * 100, 2),
-            "Prob Under": round(float(np.sum(total < line) / n) * 100, 2),
-            "Prob Push": round(float(np.sum(total == line) / n) * 100, 2),
+            "Prob Over": round(float(np.sum(total_dist > line) / n_total) * 100, 2),
+            "Prob Under": round(float(np.sum(total_dist < line) / n_total) * 100, 2),
+            "Prob Push": round(float(np.sum(total_dist == line) / n_total) * 100, 2),
         })
 
     spread_margin = _spread_distribution(h["general_margin"], a["general_margin"])
@@ -127,7 +127,7 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
 
     return {
         "Disponible": True,
-        "Metodo": "Distribucion empirica; Spread con margenes reales unicos",
+        "Metodo": "Distribucion empirica sin productos cartesianos; muestras reales unicas",
         "Muestras_Local": int(len(h_off)),
         "Muestras_Visita": int(len(a_off)),
         "Venue_Local_N": h["home_n"],
@@ -135,7 +135,7 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
         "Proyeccion_Score": {
             local: round(float(np.mean(score_h)), 2),
             visita: round(float(np.mean(score_a)), 2),
-            "Total_Proyectado": round(float(np.mean(score_h) + np.mean(score_a)), 2),
+            "Total_Proyectado": round(float(np.mean(total_dist)), 2),
         },
         "Moneyline": {
             "Gana Local": round(p_home * 100, 2),
