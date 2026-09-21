@@ -97,13 +97,13 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
     rows = [dict(x) for x in (bets or [])]
     if not rows:
         return {"ok": True, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                "skipped_spread_variant": 0, "message": "no bets"}
+                "skipped_spread_variant": 0, "skipped_total_variant": 0, "message": "no bets"}
 
     target_sheet_id = (sheet_id or SHEET_ID).strip()
     target_worksheet = (worksheet or WORKSHEET).strip() or "NFL_Picks"
     if not target_sheet_id:
         return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                "skipped_spread_variant": 0, "message": "sheet id missing"}
+                "skipped_spread_variant": 0, "skipped_total_variant": 0, "message": "sheet id missing"}
 
     credentials = None; project_id = None
     try:
@@ -121,7 +121,7 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
             values = [HEADERS]
         elif values[0][:len(HEADERS)] != HEADERS:
             return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                    "skipped_spread_variant": 0, "worksheet": target_worksheet,
+                    "skipped_spread_variant": 0, "skipped_total_variant": 0, "worksheet": target_worksheet,
                     "message": "header mismatch; existing sheet preserved"}
 
         existing_ids = {r[15] for r in values[1:] if len(r) >= 16 and r[15]}
@@ -185,7 +185,7 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
                 "service_account_email": getattr(credentials, "service_account_email", None), "adc_project": project_id}
     except Exception as exc:
         return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                "skipped_spread_variant": 0, "worksheet": target_worksheet,
+                "skipped_spread_variant": 0, "skipped_total_variant": 0, "worksheet": target_worksheet,
                 "message": f"{type(exc).__name__}: {str(exc) or repr(exc)}"[:1000],
                 "credential_type": type(credentials).__name__ if credentials is not None else "unresolved",
                 "service_account_email": getattr(credentials, "service_account_email", None) if credentials is not None else None,
