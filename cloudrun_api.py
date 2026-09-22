@@ -269,7 +269,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         picks = sorted(picks, key=lambda x: x["score"], reverse=True)
         bets = [p for p in picks if p["action"] == "BET"]
         leans = [p for p in picks if p["action"] == "LEAN"]
-        # Defense-in-depth: SPREAD can never reach Sheet sync even if a future caller mislabels it.
+        # Persist every validated BET recommendation; sync_bets enforces immutable snapshots and duplicate protection.
         sheet_sync = sync_bets(bets, season, week, bankroll)
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
             "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "1/4 Kelly puro; máximo 3% del bankroll por BET",

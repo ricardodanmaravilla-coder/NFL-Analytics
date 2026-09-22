@@ -4,8 +4,14 @@ on:
   push:
     paths:
       - 'cloudrun_api.py'
+      - 'cloudrun_entrypoint.py'
+      - 'modules/nfl_calibration.py'
+      - 'modules/nfl_google_sheets.py'
       - 'modules/nfl_moneyline_runtime.py'
+      - 'modules/nfl_montecarlo_sim.py'
       - 'modules/nfl_pbp_engine.py'
+      - 'modules/nfl_production_history.py'
+      - 'modules/nfl_therundown_odds.py'
       - 'test_nfl_production_safety.py'
       - 'test_nfl_pbp_asof.py'
       - '.github/workflows/nfl-production-safety.yml'
