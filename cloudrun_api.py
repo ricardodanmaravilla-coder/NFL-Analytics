@@ -23,7 +23,7 @@ app = FastAPI(title="NFL Analytics API", version="3.9")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
-MAX_STAKE_FRACTION = 0.03
+MAX_STAKE_FRACTION = 0.05
 MIN_PROBABILITY = 58.0
 MIN_MC_PROBABILITY = 58.0
 MAX_DISAGREEMENT = 15.0
@@ -181,7 +181,7 @@ def health():
         "pbp_asof_cutoff": True,
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
-        "staking_policy": "1/4 Kelly puro; máximo 3% del bankroll",
+        "staking_policy": "1/4 Kelly puro; máximo 5% del bankroll",
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
 
@@ -272,7 +272,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         # Persist every validated BET recommendation; sync_bets enforces immutable snapshots and duplicate protection.
         sheet_sync = sync_bets(bets, season, week, bankroll)
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
-            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "1/4 Kelly puro; máximo 3% del bankroll por BET",
+            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "1/4 Kelly puro; máximo 5% del bankroll por BET",
             "markets": ["ML", "SPREAD", "TOTAL"],
             "market_policy": "ML/SPREAD/TOTAL: recomendación habilitada cuando pasan filtros de producción",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
