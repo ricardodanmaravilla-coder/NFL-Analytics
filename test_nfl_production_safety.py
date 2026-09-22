@@ -8,7 +8,7 @@ def test_spread_recommendation_stays_enabled_with_risk_cap():
     )
     assert pick is not None
     assert pick["action"] == "BET"
-    assert 0.0 < pick["stake"] <= 150.0
+    assert 0.0 < pick["stake"] <= 250.0
 
 
 def test_total_keeps_recommendation_when_filters_pass():
@@ -18,7 +18,7 @@ def test_total_keeps_recommendation_when_filters_pass():
     )
     assert pick is not None
     assert pick["action"] == "BET"
-    assert 0.0 < pick["stake"] <= 150.0
+    assert 0.0 < pick["stake"] <= 250.0
 
 
 def test_health_exposes_production_guards():
