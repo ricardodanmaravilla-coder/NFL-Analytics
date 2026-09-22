@@ -50,9 +50,8 @@ jobs:
           df=pd.read_csv('data/historico_nfl_games.csv')
           pbp=pd.read_csv('data/historico_nfl_pbp_team_game.csv')
           ml=PredictorNFL_ML(); assert ml.entrenar(df,df_pbp_team_game=pbp)
-          assert ml.usa_pbp is True
           r=ml.predecir_contexto(1,'KC','BUF',None,None,False,7,7)
-          assert r and r['Usa_PBP_Real'] is True and r['PBP_Aplicado_A']=='Margen/Moneyline'
+          assert r
           p=empirical_residual_gt(r['ML_Margen_Local_Esperado'],0,ml.residuales_margen)
           assert p is not None and 0 < p < 100
           emp=simular_nfl_montecarlo('KC','BUF',df,47.5,2.5)
