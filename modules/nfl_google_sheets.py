@@ -44,24 +44,24 @@ def _request_json(session, method: str, url: str, **kwargs):
     return response.json() if response.content else {}
 
 
-def _total_key(game: Any, pick: Any):
-    """Identity of a total ignoring line movement: (game, OVER/UNDER)."""
+def _total_key(season: Any, week: Any, game: Any, pick: Any):
+    """Identity of a total ignoring line movement within one NFL week."""
     p = _clean(pick)
     m = re.fullmatch(r"(Over|Under)\s+[0-9]+(?:\.[0-9]+)?", p, flags=re.I)
     if not m:
         return None
-    return (_clean(game), m.group(1).upper())
+    return (_clean(season), _clean(week), _clean(game), m.group(1).upper())
 
 
-def _spread_key(game: Any, pick: Any):
-    """Identidad de spread ignorando la línea: (partido, equipo).
+def _spread_key(season: Any, week: Any, game: Any, pick: Any):
+    """Identidad de spread ignorando la línea dentro de una semana NFL.
 
     DEN +2.5, DEN +3 y DEN +3.5 producen la misma llave. ML y Totals devuelven None.
     """
     match = _SPREAD_RE.fullmatch(_clean(pick))
     if not match:
         return None
-    return (_clean(game), _normalize_team(match.group(1)))
+    return (_clean(season), _clean(week), _clean(game), _normalize_team(match.group(1)))
 
 
 def _profit(stake: float, odds: float, won: bool, push: bool = False) -> float:
@@ -134,10 +134,10 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
                     continue
             except Exception:
                 continue
-            key = _spread_key(r[3], r[4])
+            key = _spread_key(r[1], r[2], r[3], r[4])
             if key is not None:
                 existing_spreads.add(key)
-            total_key = _total_key(r[3], r[4])
+            total_key = _total_key(r[1], r[2], r[3], r[4])
             if total_key is not None:
                 existing_totals.add(total_key)
 
@@ -150,13 +150,13 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
                 skipped += 1
                 continue
 
-            key = _spread_key(bet.get("game"), bet.get("pick"))
+            key = _spread_key(season, week, bet.get("game"), bet.get("pick"))
             if key is not None and (key in existing_spreads or key in seen_spreads):
                 skipped += 1
                 skipped_spread_variant += 1
                 continue
 
-            total_key = _total_key(bet.get("game"), bet.get("pick"))
+            total_key = _total_key(season, week, bet.get("game"), bet.get("pick"))
             if total_key is not None and (total_key in existing_totals or total_key in seen_totals):
                 skipped += 1
                 skipped_total_variant += 1
