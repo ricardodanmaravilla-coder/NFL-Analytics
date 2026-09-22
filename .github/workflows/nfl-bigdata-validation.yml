@@ -75,8 +75,11 @@ jobs:
           assert set(pbp['game_id'].dropna().astype(str)).issubset(allowed)
           assert not ((pd.to_numeric(pbp['season']) > 2025) | ((pd.to_numeric(pbp['season']) == 2025) & (pd.to_numeric(pbp['week']) >= 10))).any()
           assert runtime.entrenar(past, pd.DataFrame())
-          assert runtime.usa_pbp is True
-          print({'pbp_rows': len(pbp), 'usa_pbp': runtime.usa_pbp})
+          # PBP is loaded and as-of filtered, but remains a research challenger
+          # until it proves positive OOS value; production Moneyline uses baseline.
+          assert runtime.usa_pbp is False
+          assert runtime.PBP_MARGIN_ENABLED is False
+          print({'pbp_rows': len(pbp), 'usa_pbp': runtime.usa_pbp, 'pbp_margin_enabled': runtime.PBP_MARGIN_ENABLED})
           PY
       - name: Existing PBP backtest smoke test
         run: python backtest_nfl_pbp_v1.py

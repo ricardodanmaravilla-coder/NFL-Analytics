@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 
 import duckdb
 import numpy as np
@@ -43,10 +44,16 @@ def construir_lake_nflverse(seasons, raw_dir=DEFAULT_RAW_PARQUET, team_dir=DEFAU
 
     raw_dir = Path(raw_dir)
     team_dir = Path(team_dir)
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    team_dir.mkdir(parents=True, exist_ok=True)
+    requested_seasons = sorted({int(s) for s in seasons})
+    # This function builds a complete lake for the requested season set.
+    # Start clean so committed/stale partitions outside that set (for example
+    # an early current-season snapshot) cannot leak into validation/training.
+    for base in (raw_dir, team_dir):
+        if base.exists():
+            shutil.rmtree(base)
+        base.mkdir(parents=True, exist_ok=True)
     aggregates = []
-    for season in sorted({int(s) for s in seasons}):
+    for season in requested_seasons:
         pbp = nfl.import_pbp_data([season], downcast=True, cache=False, include_participation=False)
         if pbp is None or pbp.empty:
             raise RuntimeError(f"nflverse no devolvió PBP para {season}")

@@ -44,15 +44,24 @@ def _request_json(session, method: str, url: str, **kwargs):
     return response.json() if response.content else {}
 
 
-def _spread_key(game: Any, pick: Any):
-    """Identidad de spread ignorando la línea: (partido, equipo).
+def _total_key(season: Any, week: Any, game: Any, pick: Any):
+    """Identity of a total ignoring line movement within one NFL week."""
+    p = _clean(pick)
+    m = re.fullmatch(r"(Over|Under)\s+[0-9]+(?:\.[0-9]+)?", p, flags=re.I)
+    if not m:
+        return None
+    return (_clean(season), _clean(week), _clean(game), m.group(1).upper())
+
+
+def _spread_key(season: Any, week: Any, game: Any, pick: Any):
+    """Identidad de spread ignorando la línea dentro de una semana NFL.
 
     DEN +2.5, DEN +3 y DEN +3.5 producen la misma llave. ML y Totals devuelven None.
     """
     match = _SPREAD_RE.fullmatch(_clean(pick))
     if not match:
         return None
-    return (_clean(game), _normalize_team(match.group(1)))
+    return (_clean(season), _clean(week), _clean(game), _normalize_team(match.group(1)))
 
 
 def _profit(stake: float, odds: float, won: bool, push: bool = False) -> float:
@@ -88,13 +97,13 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
     rows = [dict(x) for x in (bets or [])]
     if not rows:
         return {"ok": True, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                "skipped_spread_variant": 0, "message": "no bets"}
+                "skipped_spread_variant": 0, "skipped_total_variant": 0, "message": "no bets"}
 
     target_sheet_id = (sheet_id or SHEET_ID).strip()
     target_worksheet = (worksheet or WORKSHEET).strip() or "NFL_Picks"
     if not target_sheet_id:
         return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                "skipped_spread_variant": 0, "message": "sheet id missing"}
+                "skipped_spread_variant": 0, "skipped_total_variant": 0, "message": "sheet id missing"}
 
     credentials = None; project_id = None
     try:
@@ -112,11 +121,11 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
             values = [HEADERS]
         elif values[0][:len(HEADERS)] != HEADERS:
             return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                    "skipped_spread_variant": 0, "worksheet": target_worksheet,
+                    "skipped_spread_variant": 0, "skipped_total_variant": 0, "worksheet": target_worksheet,
                     "message": "header mismatch; existing sheet preserved"}
 
         existing_ids = {r[15] for r in values[1:] if len(r) >= 16 and r[15]}
-        existing_spreads = set()
+        existing_spreads = set(); existing_totals = set()
         for r in values[1:]:
             if len(r) < 5:
                 continue
@@ -125,28 +134,39 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
                     continue
             except Exception:
                 continue
-            key = _spread_key(r[3], r[4])
+            key = _spread_key(r[1], r[2], r[3], r[4])
             if key is not None:
                 existing_spreads.add(key)
+            total_key = _total_key(r[1], r[2], r[3], r[4])
+            if total_key is not None:
+                existing_totals.add(total_key)
 
         now_mx = datetime.now(ZoneInfo("America/Mexico_City")).strftime("%Y-%m-%d %H:%M:%S")
-        payload, seen_ids, seen_spreads = [], set(), set()
-        skipped = skipped_spread_variant = 0
+        payload, seen_ids, seen_spreads, seen_totals = [], set(), set(), set()
+        skipped = skipped_spread_variant = skipped_total_variant = 0
         for bet in rows:
             rec_id = _record_id(season, week, bet)
             if rec_id in existing_ids or rec_id in seen_ids:
                 skipped += 1
                 continue
 
-            key = _spread_key(bet.get("game"), bet.get("pick"))
+            key = _spread_key(season, week, bet.get("game"), bet.get("pick"))
             if key is not None and (key in existing_spreads or key in seen_spreads):
                 skipped += 1
                 skipped_spread_variant += 1
                 continue
 
+            total_key = _total_key(season, week, bet.get("game"), bet.get("pick"))
+            if total_key is not None and (total_key in existing_totals or total_key in seen_totals):
+                skipped += 1
+                skipped_total_variant += 1
+                continue
+
             seen_ids.add(rec_id)
             if key is not None:
                 seen_spreads.add(key)
+            if total_key is not None:
+                seen_totals.add(total_key)
             payload.append([
                 now_mx, int(season), int(week), _clean(bet.get("game")), _clean(bet.get("pick")),
                 bet.get("probability", ""), bet.get("odds", ""), bet.get("edge", ""), bet.get("ev", ""),
@@ -159,13 +179,13 @@ def sync_bets(bets: Iterable[Mapping[str, Any]], season: int, week: int, bankrol
                           json={"majorDimension": "ROWS", "values": payload})
 
         return {"ok": True, "inserted": len(payload), "updated": 0, "skipped_existing": skipped,
-                "skipped_spread_variant": skipped_spread_variant, "worksheet": target_worksheet,
-                "message": "saved via Sheets API; first spread line per team/game preserved; ML/Totals unaffected",
+                "skipped_spread_variant": skipped_spread_variant, "skipped_total_variant": skipped_total_variant, "worksheet": target_worksheet,
+                "message": "saved via Sheets API; first spread and total side per game preserved; ML unaffected",
                 "credential_type": type(credentials).__name__,
                 "service_account_email": getattr(credentials, "service_account_email", None), "adc_project": project_id}
     except Exception as exc:
         return {"ok": False, "inserted": 0, "updated": 0, "skipped_existing": 0,
-                "skipped_spread_variant": 0, "worksheet": target_worksheet,
+                "skipped_spread_variant": 0, "skipped_total_variant": 0, "worksheet": target_worksheet,
                 "message": f"{type(exc).__name__}: {str(exc) or repr(exc)}"[:1000],
                 "credential_type": type(credentials).__name__ if credentials is not None else "unresolved",
                 "service_account_email": getattr(credentials, "service_account_email", None) if credentials is not None else None,

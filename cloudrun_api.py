@@ -23,12 +23,12 @@ app = FastAPI(title="NFL Analytics API", version="3.9")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
-MAX_STAKE_FRACTION = 0.05
+MAX_STAKE_FRACTION = 0.03
 MIN_PROBABILITY = 58.0
 MIN_MC_PROBABILITY = 58.0
 MAX_DISAGREEMENT = 15.0
-KELLY_WEIGHT = 0.30
-CONFIDENCE_WEIGHT = 0.70
+KELLY_WEIGHT = 1.00
+CONFIDENCE_WEIGHT = 0.00
 CONFIDENCE_STAKE_SLOPE = 0.40
 
 
@@ -133,9 +133,9 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
 
 def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, odd_other,
                      bankroll=DEFAULT_BANKROLL, book=None, source=None, fetched_at=None, auto_bet=None):
-    """Spread is informational-only until a stable OOS edge is validated; Totals keep auto-BET."""
+    """All validated markets remain visible as recommendations; only BET actions are synced as wagers."""
     if auto_bet is None:
-        auto_bet = str(market).upper() != "SPREAD"
+        auto_bet = True
     return _build_candidate(game, pick, primary_prob, [mc_prob], mc_prob, odd_self, odd_other, bankroll,
         auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at)
 
@@ -176,12 +176,12 @@ def health():
         "status": "ok", "service": "NFL Analytics Cloud Run", "version": "3.9",
         "kickoff_weather": True, "live_odds_provider": "TheRundown",
         "markets": ["moneyline", "spread", "total"],
-        "market_policy": "ML/TOTAL may auto-BET when filters pass; SPREAD is LEAN/informational only and never synced as a BET",
-        "spread_auto_bet": False,
+        "market_policy": "ML/SPREAD/TOTAL remain enabled as recommendations when production filters pass",
+        "spread_auto_bet": True, "total_auto_bet": True,
         "pbp_asof_cutoff": True,
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
-        "staking_policy": "Kelly híbrido: 30% 1/4 Kelly + 70% confianza; máximo 5%",
+        "staking_policy": "1/4 Kelly puro; máximo 3% del bankroll",
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
 
@@ -270,12 +270,11 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         bets = [p for p in picks if p["action"] == "BET"]
         leans = [p for p in picks if p["action"] == "LEAN"]
         # Defense-in-depth: SPREAD can never reach Sheet sync even if a future caller mislabels it.
-        bets = [p for p in bets if str(p.get("market", "")).upper() != "SPREAD"]
         sheet_sync = sync_bets(bets, season, week, bankroll)
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
-            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "Kelly híbrido seguridad: 30% de 1/4 Kelly + 70% confianza; máximo 5% del bankroll por BET",
+            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "1/4 Kelly puro; máximo 3% del bankroll por BET",
             "markets": ["ML", "SPREAD", "TOTAL"],
-            "market_policy": "ML/TOTAL: filtros de producción; SPREAD: LEAN informativo, stake $0 y nunca se sincroniza al Sheet",
+            "market_policy": "ML/SPREAD/TOTAL: recomendación habilitada cuando pasan filtros de producción",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
             "bets": bets, "leans": leans, "diagnostics": diagnostics, "sheet_sync": sheet_sync, "settlement": settlement}
     except HTTPException:

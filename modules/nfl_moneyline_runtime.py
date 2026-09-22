@@ -8,7 +8,12 @@ from modules.nfl_pbp_engine import features_pbp_actuales
 
 
 class MoneylineRuntime:
-    """Runtime de producción para margen/Moneyline y total de puntos."""
+    """Runtime de producción para margen/Moneyline y total de puntos.
+
+    PBP remains available for research, but is not used in the production
+    margin model until it demonstrates positive out-of-sample value.
+    """
+    PBP_MARGIN_ENABLED = False
 
     def __init__(self):
         self.base = PredictorNFL_ML()
@@ -68,7 +73,7 @@ class MoneylineRuntime:
         self.pbp_team_game=self._pbp_seguro_para_games(df_games,df_pbp_team_game);self.base.pbp_team_game=self.pbp_team_game
         df=self.base.construir_features_pregame(df_games,self.pbp_team_game)
         if len(df)<200:return False
-        base_features=self.base._base_feature_names();pbp_features=self.base._pbp_feature_names();self.usa_pbp=bool(not self.pbp_team_game.empty and all(c in df.columns for c in pbp_features));self.features_total=base_features;self.features_margen=base_features+(pbp_features if self.usa_pbp else [])
+        base_features=self.base._base_feature_names();pbp_features=self.base._pbp_feature_names();self.usa_pbp=bool(self.PBP_MARGIN_ENABLED and not self.pbp_team_game.empty and all(c in df.columns for c in pbp_features));self.features_total=base_features;self.features_margen=base_features+(pbp_features if self.usa_pbp else [])
         total_df=df.dropna(subset=self.features_total+['puntos_totales']);margin_df=df.dropna(subset=self.features_margen+['margen_local'])
         if len(total_df)<200 or len(margin_df)<200:return False
         Xt=total_df[self.features_total];yt=total_df['puntos_totales'];Xm=margin_df[self.features_margen];ym=margin_df['margen_local']
