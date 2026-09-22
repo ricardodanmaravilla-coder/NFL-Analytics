@@ -3,6 +3,19 @@ name: NFL Stable Filters Validation
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'backtest_nfl_stable_filters.py'
+      - 'backtest_nfl_walkforward.py'
+      - 'cloudrun_api.py'
+      - 'modules/nfl_calibration.py'
+      - 'modules/nfl_moneyline_runtime.py'
+      - 'modules/nfl_montecarlo_sim.py'
+      - 'modules/nfl_pbp_engine.py'
+      - 'modules/nfl_production_history.py'
+      - '.github/workflows/nfl-stable-filters.yml'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
