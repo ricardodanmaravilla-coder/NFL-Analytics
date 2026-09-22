@@ -86,8 +86,10 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
 
     # Distribuciones empíricas sin producto cartesiano de pseudo-partidos.
     # Cada observación histórica aporta una sola vez a la muestra efectiva.
-    score_h = np.concatenate([h_off, a_def]) / 2.0
-    score_a = np.concatenate([a_off, h_def]) / 2.0
+    # Score projection is the average of the two relevant means. Do not divide
+    # each observation before averaging: that would halve the projected score.
+    projected_home = (float(np.mean(h_off)) + float(np.mean(a_def))) / 2.0
+    projected_away = (float(np.mean(a_off)) + float(np.mean(h_def))) / 2.0
     margin_dist = _spread_distribution(h["general_margin"], a["general_margin"])
     total_dist = np.concatenate([h_off + h_def, a_off + a_def])
 
@@ -133,8 +135,8 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
         "Venue_Local_N": h["home_n"],
         "Venue_Visita_N": a["away_n"],
         "Proyeccion_Score": {
-            local: round(float(np.mean(score_h)), 2),
-            visita: round(float(np.mean(score_a)), 2),
+            local: round(projected_home, 2),
+            visita: round(projected_away, 2),
             "Total_Proyectado": round(float(np.mean(total_dist)), 2),
         },
         "Moneyline": {
