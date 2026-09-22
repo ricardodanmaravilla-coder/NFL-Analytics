@@ -5,8 +5,14 @@ on:
   push:
     paths:
       - 'backtest_nfl_production_all_markets.py'
+      - 'cloudrun_api.py'
+      - 'modules/nfl_calibration.py'
+      - 'modules/nfl_google_sheets.py'
+      - 'modules/nfl_montecarlo_sim.py'
       - 'modules/nfl_pbp_engine.py'
       - 'modules/nfl_moneyline_runtime.py'
+      - 'modules/nfl_production_history.py'
+      - 'modules/nfl_therundown_odds.py'
       - '.github/workflows/nfl-production-all-markets.yml'
 
 permissions:
