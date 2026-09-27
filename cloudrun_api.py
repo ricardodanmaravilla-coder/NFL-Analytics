@@ -69,9 +69,10 @@ def two_way(a, b):
 def kelly_stake(probability_pct, odd, bankroll):
     """Stake 3%-10% for already-qualified picks.
 
-    Model confidence remains primary (70% weight). Price contributes 30%:
-    stronger negative favorites receive moderately more stake, without changing
-    eligibility or overriding probability/MC/edge/EV gates.
+    Pick quality remains primary. The stake score uses model confidence plus a
+    bounded price-strength component, so a stronger negative favorite can receive
+    moderately more exposure than a shorter favorite at equal model probability.
+    Eligibility still depends on probability/MC/edge/EV before this function.
     """
     dec = american_to_decimal(odd)
     p_pct = num(probability_pct)
@@ -86,12 +87,14 @@ def kelly_stake(probability_pct, odd, bankroll):
     q = 1.0 - p
     full_kelly = max(0.0, (b * p - q) / b)
     quarter_kelly = full_kelly * KELLY_FRACTION
-    kelly_strength = min(max(quarter_kelly / MAX_STAKE_FRACTION, 0.0), 1.0)
+    # Confidence is independent of payout and therefore preserves price ordering.
+    confidence_strength = min(max((p - 0.58) / 0.22, 0.0), 1.0)
     if odd_num < 0:
         price_strength = min(max((abs(odd_num) - 100.0) / 200.0, 0.0), 1.0)
     else:
         price_strength = 0.0
-    combined_strength = 0.70 * kelly_strength + 0.30 * price_strength
+    # Confidence/model dominates; price only fine-tunes already-qualified picks.
+    combined_strength = 0.75 * confidence_strength + 0.25 * price_strength
     fraction = MIN_STAKE_FRACTION + (MAX_STAKE_FRACTION - MIN_STAKE_FRACTION) * combined_strength
     fraction = min(max(fraction, MIN_STAKE_FRACTION), MAX_STAKE_FRACTION)
     return round(fraction * 100.0, 2), round(bank * fraction, 2), False
