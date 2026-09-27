@@ -15,6 +15,7 @@ from modules.nfl_calibration import empirical_residual_two_way, historico_antes,
 from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_google_sheets import settle_pending, sync_bets
 from modules.nfl_moneyline_runtime import MoneylineRuntime
+from modules.nfl_production_history import load_production_history
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 from modules.nfl_therundown_odds import configured as therundown_configured, get_moneyline
 from modules.nfl_weather import forecast_kickoff
@@ -149,9 +150,8 @@ def fmt_line(v):
 
 @lru_cache(maxsize=1)
 def load_history():
-    games = pd.read_csv("data/historico_nfl_games.csv")
-    pbp_path = "data/historico_nfl_pbp_team_game.csv"
-    pbp = pd.read_csv(pbp_path) if os.path.exists(pbp_path) else pd.DataFrame()
+    """Carga histórico fresco con fallback local validado."""
+    games, pbp, _source = load_production_history(prefer_remote=True)
     return games, pbp
 
 
