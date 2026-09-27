@@ -67,7 +67,12 @@ def two_way(a, b):
 
 
 def kelly_stake(probability_pct, odd, bankroll):
-    """Stake 3%-10% after eligibility; Kelly remains primary and price is a bounded secondary modifier."""
+    """Stake 3%-10% for already-qualified picks.
+
+    Model confidence remains primary (70% weight). Price contributes 30%:
+    stronger negative favorites receive moderately more stake, without changing
+    eligibility or overriding probability/MC/edge/EV gates.
+    """
     dec = american_to_decimal(odd)
     p_pct = num(probability_pct)
     bank = num(bankroll)
@@ -81,19 +86,15 @@ def kelly_stake(probability_pct, odd, bankroll):
     q = 1.0 - p
     full_kelly = max(0.0, (b * p - q) / b)
     quarter_kelly = full_kelly * KELLY_FRACTION
-    # Map qualifying Kelly strength into the requested 3%-10% operating band.
     kelly_strength = min(max(quarter_kelly / MAX_STAKE_FRACTION, 0.0), 1.0)
-    base_fraction = MIN_STAKE_FRACTION + (MAX_STAKE_FRACTION - MIN_STAKE_FRACTION) * kelly_strength
-    # Price is deliberately secondary: stronger negative favorites get at most +1 pp.
-    # This never changes pick eligibility; edge/EV/probability/MC gates run before staking.
-    price_bonus = 0.0
     if odd_num < 0:
-        favorite_strength = min(max((abs(odd_num) - 110.0) / 190.0, 0.0), 1.0)
-        price_bonus = 0.01 * favorite_strength
-    raw_fraction = base_fraction + price_bonus
-    capped_fraction = min(max(raw_fraction, MIN_STAKE_FRACTION), MAX_STAKE_FRACTION)
-    capped = raw_fraction > MAX_STAKE_FRACTION + 1e-12
-    return round(capped_fraction * 100.0, 2), round(bank * capped_fraction, 2), capped
+        price_strength = min(max((abs(odd_num) - 100.0) / 200.0, 0.0), 1.0)
+    else:
+        price_strength = 0.0
+    combined_strength = 0.70 * kelly_strength + 0.30 * price_strength
+    fraction = MIN_STAKE_FRACTION + (MAX_STAKE_FRACTION - MIN_STAKE_FRACTION) * combined_strength
+    fraction = min(max(fraction, MIN_STAKE_FRACTION), MAX_STAKE_FRACTION)
+    return round(fraction * 100.0, 2), round(bank * fraction, 2), False
 
 def _build_candidate(game, pick, probability, support_probs, mc_prob, odd_self, odd_other, bankroll,
                      auto_bet, market, line=None, book=None, source=None, fetched_at=None):
