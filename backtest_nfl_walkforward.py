@@ -1,4 +1,4 @@
-"""Backtest walk-forward fiel al scanner de producción.
+"""Backtest walk-forward alineado con el scanner de producción.
 
 Cada semana reconstruye modelos exclusivamente con datos anteriores a esa semana.
 2026 NO se evalúa aquí: queda reservado como prueba prospectiva/live.
@@ -13,7 +13,7 @@ import nfl_data_py as nfl
 
 from modules.nfl_calibration import empirical_residual_two_way, historico_antes, primary_with_agreement
 from modules.nfl_elo_engine import MotorELONFL
-from modules.nfl_ml_engine import PredictorNFL_ML
+from modules.nfl_moneyline_runtime import MoneylineRuntime
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
 
 
@@ -53,7 +53,8 @@ def select_pick(primary, supports, odd_self, odd_other):
         return None
     edge = (p / 100 - mkt) * 100
     ev = ((p / 100) * d - 1) * 100
-    return {"p": p, "decimal": d, "edge": edge, "ev": ev} if p >= 54 and edge >= 3 and ev >= 3 else None
+    mc = float(supports[-1]) if supports and supports[-1] is not None else None
+    return {"p": p, "decimal": d, "edge": edge, "ev": ev} if p >= 58 and mc is not None and mc >= 58 and edge >= 3 and ev >= 3 else None
 
 
 def settle(win, decimal):
@@ -80,8 +81,8 @@ def evaluate_season(raw, pbp, target_season):
         past_pbp = historico_antes(pbp, target_season, week) if not pbp.empty else pd.DataFrame()
         wk = season_games[pd.to_numeric(season_games["week"], errors="coerce") == week].copy()
 
-        ml = PredictorNFL_ML()
-        if not ml.entrenar(past, df_pbp_team_game=past_pbp):
+        ml = MoneylineRuntime()
+        if not ml.entrenar(past, past_pbp):
             continue
         elo = MotorELONFL()
         elo.actualizar_ratings(past)
@@ -105,9 +106,10 @@ def evaluate_season(raw, pbp, target_season):
                 week, home, away,
                 None if pd.isna(temp) else float(temp),
                 None if pd.isna(wind) else float(wind), dome,
-                None if pd.isna(hr) else float(hr), None if pd.isna(ar) else float(ar),
+                None if pd.isna(hr) else float(hr), None if pd.isna(ar) else float(ar), season=target_season,
             )
-            emp = simular_nfl_montecarlo(home, away, past, r.get("total_line"), r.get("spread_line"))
+            spread_threshold = -float(r.get("spread_line")) if pd.notna(r.get("spread_line")) else None
+            emp = simular_nfl_montecarlo(home, away, past, r.get("total_line"), spread_threshold)
             if pred is None or not emp.get("Disponible"):
                 continue
 
