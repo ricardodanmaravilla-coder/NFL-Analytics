@@ -28,6 +28,8 @@ MAX_STAKE_FRACTION = 0.05
 MIN_PROBABILITY = 58.0
 MIN_MC_PROBABILITY = 58.0
 MAX_DISAGREEMENT = 15.0
+ML_MIN_EDGE = 4.0
+ML_MAX_EDGE = 10.0
 KELLY_WEIGHT = 1.00
 CONFIDENCE_WEIGHT = 0.00
 CONFIDENCE_STAKE_SLOPE = 0.40
@@ -126,6 +128,13 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
     p = primary_with_agreement(primary_prob, support_probs, max_disagreement=MAX_DISAGREEMENT)
     if p is None:
         return None
+    # OOS 2023-2025: ML base was unstable; only the 4-10 pp edge band survived all three seasons.
+    mkt, _ = no_vig(odd_self, odd_other)
+    if mkt is None:
+        return None
+    ml_edge = (float(p) / 100.0 - mkt) * 100.0
+    if ml_edge < ML_MIN_EDGE or ml_edge > ML_MAX_EDGE:
+        return None
     mc_prob = support_probs[-1] if support_probs else None
     odd = num(odd_self)
     return _build_candidate(game, pick, p, support_probs, mc_prob, odd_self, odd_other, bankroll,
@@ -136,7 +145,8 @@ def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, 
                      bankroll=DEFAULT_BANKROLL, book=None, source=None, fetched_at=None, auto_bet=None):
     """All validated markets remain visible as recommendations; only BET actions are synced as wagers."""
     if auto_bet is None:
-        auto_bet = True
+        # Spread/Total remain observable recommendations, not bankroll wagers, until stable OOS evidence exists.
+        auto_bet = False
     return _build_candidate(game, pick, primary_prob, [mc_prob], mc_prob, odd_self, odd_other, bankroll,
         auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at)
 
@@ -177,10 +187,11 @@ def health():
         "kickoff_weather": True, "live_odds_provider": "TheRundown",
         "markets": ["moneyline", "spread", "total"],
         "market_policy": "ML/SPREAD/TOTAL remain enabled as recommendations when production filters pass",
-        "spread_auto_bet": True, "total_auto_bet": True,
+        "spread_auto_bet": False, "total_auto_bet": False,
         "pbp_asof_cutoff": True,
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
+        "ml_edge_band_pp": [ML_MIN_EDGE, ML_MAX_EDGE],
         "staking_policy": "1/4 Kelly puro; máximo 5% del bankroll",
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
