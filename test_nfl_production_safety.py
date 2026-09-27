@@ -17,8 +17,8 @@ def test_total_keeps_recommendation_when_filters_pass():
         65.0, 64.0, -110, -110, bankroll=5000,
     )
     assert pick is not None
-    assert pick["action"] == "BET"
-    assert 0.0 < pick["stake"] <= 250.0
+    assert pick["action"] == "LEAN"
+    assert pick["stake"] == 0.0
 
 
 def test_health_exposes_production_guards():
@@ -40,15 +40,12 @@ def test_load_history_uses_fresh_validated_loader(monkeypatch):
     api.load_history.cache_clear()
 
 
-def test_moneyline_positive_odds_remain_non_auto_until_oos_gate_proves_value():
+def test_moneyline_positive_odds_outside_validated_band_is_rejected():
     pick = api.candidate(
         "A @ B", "B ML", 65.0, [64.0, 63.0],
         +120, -110, bankroll=5000,
     )
-    assert pick is not None
-    assert pick["action"] == "LEAN"
-    assert pick["stake"] == 0.0
-
+    assert pick is None
 
 def test_stake_band_and_price_modifier():
     pct_115, stake_115, _ = api.kelly_stake(70.0, -115, 5000)
