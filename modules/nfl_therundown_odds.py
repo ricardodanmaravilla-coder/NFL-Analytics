@@ -43,8 +43,17 @@ def _norm_team(value):
     return TEAM_ALIASES.get(key, key)
 
 
+def _keys():
+    """Primary key first; secondary key is failover only."""
+    values = [
+        os.getenv("THERUNDOWN_KEY", "").strip(),
+        os.getenv("THERUNDOWN_KEY_2", "").strip(),
+    ]
+    return list(dict.fromkeys(x for x in values if x))
+
+
 def configured():
-    return bool(os.getenv("THERUNDOWN_KEY", "").strip())
+    return bool(_keys())
 
 
 def _priority():
@@ -103,8 +112,8 @@ def _team_pair(event):
 
 
 def _request_snapshot(gameday, get_fn=requests.get):
-    key = os.getenv("THERUNDOWN_KEY", "").strip()
-    if not key:
+    keys = _keys()
+    if not keys:
         return None, _priority(), str(gameday)[:10]
     date = str(gameday)[:10]
     priority = _priority()
@@ -117,8 +126,24 @@ def _request_snapshot(gameday, get_fn=requests.get):
         "hide_closed": "true",
         "offset": "300",
     }
-    response = get_fn(url, params=params, headers={"X-TheRundown-Key": key, "Accept": "application/json"}, timeout=12)
-    return response, priority, date
+    last_response = None
+    for key in keys:
+        try:
+            response = get_fn(
+                url,
+                params=params,
+                headers={"X-TheRundown-Key": key, "Accept": "application/json"},
+                timeout=12,
+            )
+        except requests.RequestException:
+            continue
+        last_response = response
+        status = int(getattr(response, "status_code", 0) or 0)
+        if status == 200:
+            return response, priority, date
+        if status not in {401, 403, 408, 429, 500, 502, 503, 504}:
+            break
+    return last_response, priority, date
 
 
 def _participant_key(participant, home, away):
