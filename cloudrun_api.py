@@ -158,8 +158,9 @@ def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, 
                      bankroll=DEFAULT_BANKROLL, book=None, source=None, fetched_at=None, auto_bet=None):
     """All validated markets remain visible as recommendations; only BET actions are synced as wagers."""
     if auto_bet is None:
-        # Spread/Total remain observable recommendations, not bankroll wagers, until stable OOS evidence exists.
-        auto_bet = False
+        # Spread/Total become executable BETs only after passing the same production
+        # probability, Monte Carlo, disagreement, edge and EV gates in _build_candidate.
+        auto_bet = True
     return _build_candidate(game, pick, primary_prob, [mc_prob], mc_prob, odd_self, odd_other, bankroll,
         auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at)
 
