@@ -1,7 +1,7 @@
 """Valida filtros de apuestas sobre el mismo walk-forward del scanner.
 
 No modifica producción. Evalúa únicamente picks ya generados por la regla
-54/3/3 y compara filtros simples hallados en 2025 a través de 2023-2025.
+58/58/3/3 y compara filtros simples hallados en 2025 a través de 2023-2025.
 2023=desarrollo, 2024=validación, 2025=prueba intocable.
 """
 
