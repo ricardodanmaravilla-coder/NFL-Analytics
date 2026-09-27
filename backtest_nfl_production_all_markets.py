@@ -84,7 +84,7 @@ def main():
                 temp=pd.to_numeric(g.get('temp'),errors='coerce');wind=pd.to_numeric(g.get('wind'),errors='coerce');dome=str(g.get('roof','')).lower() in {'dome','closed','indoor','indoors'};hr=pd.to_numeric(g.get('home_rest'),errors='coerce');ar=pd.to_numeric(g.get('away_rest'),errors='coerce')
                 pred=model.predecir_contexto(week,home,away,None if pd.isna(temp) else temp,None if pd.isna(wind) else wind,dome,None if pd.isna(hr) else hr,None if pd.isna(ar) else ar)
                 if not pred:continue
-                spread_line=pd.to_numeric(g.get('spread_line'),errors='coerce');total_line=pd.to_numeric(g.get('total_line'),errors='coerce');threshold=None if pd.isna(spread_line) else float(spread_line);emp=simular_nfl_montecarlo(home,away,past,None if pd.isna(total_line) else float(total_line),threshold)
+                spread_line=pd.to_numeric(g.get('spread_line'),errors='coerce');total_line=pd.to_numeric(g.get('total_line'),errors='coerce');home_spread=None if pd.isna(spread_line) else float(spread_line);threshold=None if home_spread is None else -home_spread;emp=simular_nfl_montecarlo(home,away,past,None if pd.isna(total_line) else float(total_line),threshold)
                 if not emp.get('Disponible'):continue
                 ph,pa=empirical_residual_two_way(pred['ML_Margen_Local_Esperado'],0,model.residuales_margen);eh,ea=norm2(emp['Moneyline']['Gana Local'],emp['Moneyline']['Gana Visita']);elo_h=100*elo.calcular_probabilidad_elo(elo.ratings.get(home,1500),elo.ratings.get(away,1500));hm,am=g.get('home_moneyline'),g.get('away_moneyline')
                 if not pd.isna(hm) and not pd.isna(am) and ph is not None and eh is not None:
@@ -93,7 +93,7 @@ def main():
                 if threshold is not None:
                     sph,spa=empirical_residual_two_way(pred['ML_Margen_Local_Esperado'],threshold,model.residuales_margen);mch=emp['Spread']['Cubre Local'];mca=emp['Spread']['Cubre Visita'];sho=g.get('home_spread_odds');sao=g.get('away_spread_odds')
                     if not pd.isna(sho) and not pd.isna(sao):
-                        add(rows,season,week,g.get('game_id'),'SPREAD','H',sph,mch,sho,sao,float(hs),float(aws),-threshold);add(rows,season,week,g.get('game_id'),'SPREAD','A',spa,mca,sao,sho,float(hs),float(aws),threshold)
+                        add(rows,season,week,g.get('game_id'),'SPREAD','H',sph,mch,sho,sao,float(hs),float(aws),home_spread);add(rows,season,week,g.get('game_id'),'SPREAD','A',spa,mca,sao,sho,float(hs),float(aws),-home_spread)
                 if not pd.isna(total_line):
                     po,pu=empirical_residual_two_way(pred['ML_Puntos_Totales_Esperados'],float(total_line),model.residuales_total);mco=emp['Over_Under']['Prob Over'];mcu=emp['Over_Under']['Prob Under'];oo=g.get('over_odds');uo=g.get('under_odds')
                     if not pd.isna(oo) and not pd.isna(uo):
