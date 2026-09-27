@@ -27,3 +27,24 @@ def test_health_exposes_production_guards():
     assert h["spread_auto_bet"] is True
     assert h["total_auto_bet"] is True
     assert h["pbp_asof_cutoff"] is True
+
+
+def test_load_history_uses_fresh_validated_loader(monkeypatch):
+    games = object()
+    pbp = object()
+    api.load_history.cache_clear()
+    monkeypatch.setattr(api, "load_production_history", lambda prefer_remote=True: (games, pbp, "REMOTE_PARQUET"))
+    got_games, got_pbp = api.load_history()
+    assert got_games is games
+    assert got_pbp is pbp
+    api.load_history.cache_clear()
+
+
+def test_moneyline_positive_odds_remain_non_auto_until_oos_gate_proves_value():
+    pick = api.candidate(
+        "A @ B", "B ML", 65.0, [64.0, 63.0],
+        +120, -140, bankroll=5000,
+    )
+    assert pick is not None
+    assert pick["action"] == "LEAN"
+    assert pick["stake"] == 0.0
