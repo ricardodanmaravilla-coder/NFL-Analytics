@@ -24,7 +24,8 @@ app = FastAPI(title="NFL Analytics API", version="3.9")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
-MAX_STAKE_FRACTION = 0.05
+MIN_STAKE_FRACTION = 0.03
+MAX_STAKE_FRACTION = 0.10
 MIN_PROBABILITY = 58.0
 MIN_MC_PROBABILITY = 58.0
 MAX_DISAGREEMENT = 15.0
@@ -66,10 +67,12 @@ def two_way(a, b):
 
 
 def kelly_stake(probability_pct, odd, bankroll):
+    """Stake 3%-10% after eligibility; Kelly remains primary and price is a bounded secondary modifier."""
     dec = american_to_decimal(odd)
     p_pct = num(probability_pct)
     bank = num(bankroll)
-    if dec is None or p_pct is None or bank is None or bank <= 0:
+    odd_num = num(odd)
+    if dec is None or p_pct is None or bank is None or bank <= 0 or odd_num is None:
         return 0.0, 0.0, False
     b = dec - 1.0
     if b <= 0:
@@ -78,13 +81,19 @@ def kelly_stake(probability_pct, odd, bankroll):
     q = 1.0 - p
     full_kelly = max(0.0, (b * p - q) / b)
     quarter_kelly = full_kelly * KELLY_FRACTION
-    confidence_fraction = max(0.0, (p - 0.50) * CONFIDENCE_STAKE_SLOPE)
-    confidence_fraction = min(confidence_fraction, MAX_STAKE_FRACTION)
-    raw_fraction = KELLY_WEIGHT * quarter_kelly + CONFIDENCE_WEIGHT * confidence_fraction
-    capped_fraction = min(raw_fraction, MAX_STAKE_FRACTION)
-    capped = raw_fraction > capped_fraction + 1e-12
+    # Map qualifying Kelly strength into the requested 3%-10% operating band.
+    kelly_strength = min(max(quarter_kelly / MAX_STAKE_FRACTION, 0.0), 1.0)
+    base_fraction = MIN_STAKE_FRACTION + (MAX_STAKE_FRACTION - MIN_STAKE_FRACTION) * kelly_strength
+    # Price is deliberately secondary: stronger negative favorites get at most +1 pp.
+    # This never changes pick eligibility; edge/EV/probability/MC gates run before staking.
+    price_bonus = 0.0
+    if odd_num < 0:
+        favorite_strength = min(max((abs(odd_num) - 110.0) / 190.0, 0.0), 1.0)
+        price_bonus = 0.01 * favorite_strength
+    raw_fraction = base_fraction + price_bonus
+    capped_fraction = min(max(raw_fraction, MIN_STAKE_FRACTION), MAX_STAKE_FRACTION)
+    capped = raw_fraction > MAX_STAKE_FRACTION + 1e-12
     return round(capped_fraction * 100.0, 2), round(bank * capped_fraction, 2), capped
-
 
 def _build_candidate(game, pick, probability, support_probs, mc_prob, odd_self, odd_other, bankroll,
                      auto_bet, market, line=None, book=None, source=None, fetched_at=None):
@@ -192,7 +201,7 @@ def health():
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
         "ml_edge_band_pp": [ML_MIN_EDGE, ML_MAX_EDGE],
-        "staking_policy": "1/4 Kelly puro; máximo 5% del bankroll",
+        "staking_policy": "Kelly 1/4 como señal primaria; stake operativo 3%-10%, con ajuste secundario acotado por cuota",
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
 
@@ -283,7 +292,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         # Persist every validated BET recommendation; sync_bets enforces immutable snapshots and duplicate protection.
         sheet_sync = sync_bets(bets, season, week, bankroll)
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
-            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "1/4 Kelly puro; máximo 5% del bankroll por BET",
+            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "Kelly 1/4 primario; stake 3%-10% por BET con ajuste secundario acotado por cuota",
             "markets": ["ML", "SPREAD", "TOTAL"],
             "market_policy": "ML/SPREAD/TOTAL: recomendación habilitada cuando pasan filtros de producción",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
