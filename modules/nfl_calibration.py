@@ -91,3 +91,28 @@ def calibration_diagnostics(residuals):
         "mae": round(float(np.mean(np.abs(r))), 4),
         "rmse": round(float(np.sqrt(np.mean(r ** 2))), 4),
     }
+
+
+def market_anchored_probability(primary_prob, mc_prob, market_probability, max_disagreement=10.0):
+    """Shared production/backtest calibration for SPREAD and TOTAL (all inputs 0..100).
+
+    Returns None when the two independent signals disagree on direction or
+    exceed the disagreement guard. Market probability must be two-way no-vig.
+    """
+    vals = (primary_prob, mc_prob, market_probability)
+    if any(v is None for v in vals):
+        return None
+    try:
+        p, mc, market = (float(v) for v in vals)
+    except (TypeError, ValueError):
+        return None
+    if not all(np.isfinite(v) and 0.0 <= v <= 100.0 for v in (p, mc, market)):
+        return None
+    if (p >= 50.0) != (mc >= 50.0):
+        return None
+    disagreement = abs(p - mc)
+    if disagreement > max_disagreement:
+        return None
+    signal = 0.60 * p + 0.40 * mc
+    reliability = max(0.20, 0.50 * (1.0 - disagreement / max_disagreement))
+    return market + reliability * (signal - market)
