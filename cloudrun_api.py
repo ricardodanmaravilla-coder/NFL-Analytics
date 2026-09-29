@@ -24,8 +24,7 @@ app = FastAPI(title="NFL Analytics API", version="3.9")
 MODEL_CACHE = {}
 DEFAULT_BANKROLL = 5000.0
 KELLY_FRACTION = 0.25
-MIN_STAKE_FRACTION = 0.03
-MAX_STAKE_FRACTION = 0.10
+MAX_STAKE_FRACTION = 0.05
 MIN_PROBABILITY = 58.0
 MIN_MC_PROBABILITY = 58.0
 MAX_DISAGREEMENT = 15.0
@@ -67,38 +66,21 @@ def two_way(a, b):
 
 
 def kelly_stake(probability_pct, odd, bankroll):
-    """Stake 3%-10% for already-qualified picks.
-
-    Pick quality remains primary. The stake score uses model confidence plus a
-    bounded price-strength component, so a stronger negative favorite can receive
-    moderately more exposure than a shorter favorite at equal model probability.
-    Eligibility still depends on probability/MC/edge/EV before this function.
-    """
+    """True quarter-Kelly sizing with a hard 5% bankroll ceiling."""
     dec = american_to_decimal(odd)
     p_pct = num(probability_pct)
     bank = num(bankroll)
-    odd_num = num(odd)
-    if dec is None or p_pct is None or bank is None or bank <= 0 or odd_num is None:
+    if dec is None or p_pct is None or bank is None or bank <= 0:
         return 0.0, 0.0, False
     b = dec - 1.0
     if b <= 0:
         return 0.0, 0.0, False
     p = min(max(p_pct / 100.0, 0.0), 1.0)
-    q = 1.0 - p
-    full_kelly = max(0.0, (b * p - q) / b)
+    full_kelly = max(0.0, (b * p - (1.0 - p)) / b)
     quarter_kelly = full_kelly * KELLY_FRACTION
-    # Confidence is independent of payout and therefore preserves price ordering.
-    confidence_strength = min(max((p - 0.58) / 0.22, 0.0), 1.0)
-    if odd_num < 0:
-        price_strength = min(max((abs(odd_num) - 100.0) / 200.0, 0.0), 1.0)
-    else:
-        price_strength = 0.0
-    # Confidence/model dominates; price only fine-tunes already-qualified picks.
-    combined_strength = 0.75 * confidence_strength + 0.25 * price_strength
-    fraction = MIN_STAKE_FRACTION + (MAX_STAKE_FRACTION - MIN_STAKE_FRACTION) * combined_strength
-    fraction = min(max(fraction, MIN_STAKE_FRACTION), MAX_STAKE_FRACTION)
-    return round(fraction * 100.0, 2), round(bank * fraction, 2), False
-
+    fraction = min(quarter_kelly, MAX_STAKE_FRACTION)
+    capped = quarter_kelly > MAX_STAKE_FRACTION
+    return round(fraction * 100.0, 2), round(bank * fraction, 2), capped
 def _build_candidate(game, pick, probability, support_probs, mc_prob, odd_self, odd_other, bankroll,
                      auto_bet, market, line=None, book=None, source=None, fetched_at=None):
     p = num(probability)
@@ -205,7 +187,7 @@ def health():
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
         "ml_edge_band_pp": [ML_MIN_EDGE, ML_MAX_EDGE],
-        "staking_policy": "Kelly 1/4 como señal primaria; stake operativo 3%-10%, con ajuste secundario acotado por cuota",
+        "staking_policy": "Kelly 1/4 real con tope duro de 5% del bankroll",
         "current_odds_policy": "TheRundown only; nflverse lines are historical/backtest only",
     }
 
@@ -296,7 +278,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         # Persist every validated BET recommendation; sync_bets enforces immutable snapshots and duplicate protection.
         sheet_sync = sync_bets(bets, season, week, bankroll)
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
-            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "Kelly 1/4 primario; stake 3%-10% por BET con ajuste secundario acotado por cuota",
+            "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "Kelly 1/4 real con tope duro de 5% del bankroll",
             "markets": ["ML", "SPREAD", "TOTAL"],
             "market_policy": "ML: BET en banda OOS estable; SPREAD/TOTAL: LEAN observable sin riesgo de bankroll",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
