@@ -64,5 +64,15 @@ jobs:
           fi
           git commit -m "data(nfl): append shadow observations and settled results"
           git fetch origin main
-          git rebase origin/main
+          if ! git rebase origin/main; then
+            # The dashboard is fully derived; prefer the latest generated copy
+            # when another run or a manual update published the same file.
+            if git ls-files -u | grep -q 'data/nfl_shadow/PANEL_NFL.md'; then
+              git checkout --theirs -- data/nfl_shadow/PANEL_NFL.md
+              git add data/nfl_shadow/PANEL_NFL.md
+              GIT_EDITOR=true git rebase --continue
+            else
+              exit 1
+            fi
+          fi
           git push origin main
