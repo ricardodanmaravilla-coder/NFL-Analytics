@@ -1,0 +1,60 @@
+name: NFL Shadow Monitor
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Optional season'
+        required: false
+      week:
+        description: 'Optional NFL week'
+        required: false
+  schedule:
+    - cron: '7 15,22 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: nfl-shadow-monitor
+  cancel-in-progress: false
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Validate syntax
+        run: python -m compileall -q nfl_shadow_monitor.py cloudrun_api.py
+      - name: Capture predictions and settle prior picks
+        env:
+          NFL_SHADOW_API: https://nfl-analytics-664101772310.northamerica-south1.run.app
+          SEASON: ${{ github.event.inputs.season }}
+          WEEK: ${{ github.event.inputs.week }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${SEASON:-}" && -n "${WEEK:-}" ]]; then
+            python nfl_shadow_monitor.py --season "$SEASON" --week "$WEEK"
+          else
+            python nfl_shadow_monitor.py
+          fi
+      - name: Persist append-only monitoring records
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/nfl_shadow/
+          if git diff --cached --quiet; then
+            echo "No new shadow records"
+            exit 0
+          fi
+          git commit -m "data(nfl): append shadow observations and settled results"
+          git fetch origin main
+          git rebase origin/main
+          git push origin main
