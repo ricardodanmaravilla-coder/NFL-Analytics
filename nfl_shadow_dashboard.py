@@ -1,133 +1,116 @@
-"""Readable GitHub mobile dashboard for three independent NFL paper engines."""
+"""Mobile-first GitHub dashboard: one vertically stacked card per NFL paper pick."""
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path("data/nfl_shadow")
-MARKETS = ("ML", "SPREAD", "TOTAL")
-NAMES = {"ML": "MONEYLINE · Ganador", "SPREAD": "SPREAD · Hándicap", "TOTAL": "TOTALES · Over/Under"}
+MARKETS = (("ML", "🏆 MONEYLINE · Ganador"), ("SPREAD", "📏 SPREAD · Hándicap"),
+           ("TOTAL", "🎯 TOTALES · Over/Under"))
 
-def read(name):
-    path = ROOT / name
+def read(filename):
+    path = ROOT / filename
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-def cell(value):
-    return str(value if value is not None else "—").replace("|", "/").replace("\n", " ")
-
-def table(rows, columns):
-    if not rows:
-        return "_Todavía no hay recomendaciones en este mercado._\n"
-    header = "| " + " | ".join(title for title, _ in columns) + " |"
-    divider = "| " + " | ".join("---" for _ in columns) + " |"
-    body = ["| " + " | ".join(cell(row.get(key)) for _, key in columns) + " |" for row in rows]
-    return "\n".join([header, divider] + body) + "\n"
-
-def hypothetical_kelly(probability_pct, american_odds):
-    """Full Kelly and capped quarter-Kelly, percentages of a hypothetical bankroll.
-    Negative/invalid edge returns zero; does not authorize real staking.
-    """
-    if probability_pct is None or american_odds is None:
+def kelly(probability, american_odds):
+    """Hypothetical full Kelly and capped quarter Kelly, percentages."""
+    if probability is None or american_odds is None:
         return 0.0, 0.0
-    p = float(probability_pct) / 100.0
-    odds = float(american_odds)
-    if not 0 <= p <= 1 or (-100 < odds < 100):
+    p = float(probability) / 100.0
+    odd = float(american_odds)
+    if not 0 <= p <= 1 or -100 < odd < 100:
         return 0.0, 0.0
-    b = odds / 100.0 if odds > 0 else 100.0 / abs(odds)
-    full = max(0.0, (b * p - (1.0 - p)) / b)
-    return round(100 * full, 2), round(100 * min(full * 0.25, 0.05), 2)
+    b = odd / 100 if odd > 0 else 100 / abs(odd)
+    full = max(0.0, (b * p - (1 - p)) / b)
+    return round(full * 100, 2), round(min(full / 4, 0.05) * 100, 2)
 
-def render():
-    picks = read("independent_recommendations.jsonl")
-    results = {r["recommendation_id"]: r for r in read("independent_results.jsonl")}
-    snapshots = read("independent_snapshots.jsonl")
+def render(picks=None, settled=None, snapshots=None):
+    picks = read("independent_recommendations.jsonl") if picks is None else picks
+    settled = read("independent_results.jsonl") if settled is None else settled
+    snapshots = read("independent_snapshots.jsonl") if snapshots is None else snapshots
+    results = {x["recommendation_id"]: x for x in settled}
     now = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
-    parts = [
-        "# NFL · Panel de los tres motores independientes",
+    lines = [
+        "# 🏈 PANEL NFL",
         "",
-        "> **SOLO MONITOREO — $0 apostados.** Actualizado: " + now,
+        "### Tres motores independientes · Solo monitoreo",
         "",
-        "Consulta los resultados desde el celular. Las probabilidades son estimaciones de los modelos, no garantías.",
+        "> **Dinero apostado: $0** · Kelly exclusivamente hipotético.",
         "",
-        "**Kelly hipotético:** Kelly completo y ¼ de Kelly limitado al 5% de una banca ficticia. "
-        "Se calcula con la probabilidad y cuota congeladas al registrar el pick. "
-        "**No es una apuesta ni una instrucción para apostar.**",
+        "**Última actualización:** " + now,
         "",
-        "## Resumen por motor",
+        "## 📊 Resumen",
         "",
     ]
-    summary = []
-    for market in MARKETS:
-        group = [p for p in picks if p.get("market") == market]
-        settled = [results[p["recommendation_id"]] for p in group if p["recommendation_id"] in results]
-        wins = sum(r["result"] == "WIN" for r in settled)
-        losses = sum(r["result"] == "LOSS" for r in settled)
-        pushes = sum(r["result"] == "PUSH" for r in settled)
-        roi = 100 * sum(r["paper_return_per_unit"] for r in settled) / len(settled) if settled else None
-        summary.append({
-            "motor": market, "picks": len(group), "pending": len(group) - len(settled),
-            "wins": wins, "losses": losses, "pushes": pushes,
-            "hit": f"{100 * wins / (wins + losses):.1f}%" if wins + losses else "—",
-            "roi": f"{roi:+.1f}%" if roi is not None else "—",
-        })
-    parts.extend([table(summary, [
-        ("Motor", "motor"), ("Picks", "picks"), ("Pendientes", "pending"),
-        ("Ganadas", "wins"), ("Perdidas", "losses"), ("Anuladas", "pushes"),
-        ("Acierto", "hit"), ("ROI simulado", "roi"),
-    ]), ""])
+    for market, name in MARKETS:
+        group = [x for x in picks if x.get("market") == market]
+        done = [results[x["recommendation_id"]] for x in group if x["recommendation_id"] in results]
+        wins = sum(x["result"] == "WIN" for x in done)
+        losses = sum(x["result"] == "LOSS" for x in done)
+        pushes = sum(x["result"] == "PUSH" for x in done)
+        roi = sum(x["paper_return_per_unit"] for x in done) / len(done) * 100 if done else None
+        lines.extend([
+            "**" + name + "**",
+            "",
+            f"**{len(group)} picks** · 🟡 {len(group)-len(done)} pendientes · "
+            f"🟢 {wins} ganadas · 🔴 {losses} perdidas · ⚪ {pushes} anuladas",
+            "",
+            "**ROI simulado:** " + (f"{roi:+.1f}%" if roi is not None else "Sin resultados todavía"),
+            "",
+        ])
     if snapshots:
         latest = snapshots[-1]
-        parts.append("**Último escaneo:** " + cell(latest.get("captured_at")) +
-                     " · " + str(len(latest.get("recommendations", []))) + " lados cotizados.")
-        missing = [x.get("game") for x in latest.get("diagnostics", []) if x.get("status") != "QUOTED"]
-        if missing:
-            parts.append("**Mercados incompletos:** " + ", ".join(missing))
-        parts.append("")
-    for market in MARKETS:
-        group = sorted((p for p in picks if p.get("market") == market),
-                       key=lambda p: p.get("captured_at", ""), reverse=True)
-        parts.extend(["---", "", "## " + NAMES[market], ""])
-        rows = []
-        for p in group[:100]:
-            result = results.get(p["recommendation_id"])
-            status = {"WIN": "GANADA", "LOSS": "PERDIDA", "PUSH": "ANULADA"}.get(
-                result["result"], "PENDIENTE") if result else "PENDIENTE"
-            score = (f'{result["away_score"]:g}–{result["home_score"]:g}' if result else "—")
-            full_kelly, quarter_kelly = hypothetical_kelly(p.get("probability"), p.get("odds"))
-            rows.append({
-                "date": p.get("captured_at", "")[:10], "game": p.get("game"),
-                "pick": p.get("pick"), "prob": f'{p.get("probability", 0):g}%',
-                "odds": p.get("odds"), "edge": f'{p.get("edge_pp", 0):g} pp',
-                "status": status, "score": score,
-                "kelly": f"{full_kelly:.2f}%", "quarter": f"{quarter_kelly:.2f}%",
-            })
-        parts.extend([table(rows, [
-            ("Fecha", "date"), ("Partido", "game"), ("Selección", "pick"),
-            ("Probabilidad", "prob"), ("Cuota", "odds"), ("Ventaja", "edge"),
-            ("Kelly teórico", "kelly"), ("¼ Kelly (máx. 5%)", "quarter"),
-            ("Resultado", "status"), ("Marcador visita–local", "score"),
-        ]), ""])
-    parts.extend([
-        "---", "",
-        "**Actualización:** domingo a las 8:00 a. m. (Hidalgo). "
-        "Los partidos terminados se liquidan durante la siguiente ejecución. "
-        "Las cuotas originales se conservan para evaluar cada recomendación.",
+        lines.extend(["**Último escaneo:** " + str(latest.get("captured_at", "—"))[:16].replace("T", " ") + " UTC", ""])
+    for market, name in MARKETS:
+        group = sorted((x for x in picks if x.get("market") == market),
+                       key=lambda x: x.get("captured_at", ""), reverse=True)
+        lines.extend(["---", "", "## " + name, ""])
+        if not group:
+            lines.extend(["Sin recomendaciones todavía.", ""])
+        for x in group:
+            result = results.get(x["recommendation_id"])
+            status = {"WIN": "🟢 GANADA", "LOSS": "🔴 PERDIDA",
+                      "PUSH": "⚪ ANULADA"}.get(result["result"], "🟡 PENDIENTE") if result else "🟡 PENDIENTE"
+            full, quarter = kelly(x.get("probability"), x.get("odds"))
+            lines.extend([
+                "### " + str(x.get("game", "Partido")),
+                "",
+                "**🎯 PICK: " + str(x.get("pick", "—")) + "**",
+                "",
+                "**" + status + "**",
+                "",
+                f"**Probabilidad:** {x.get('probability', '—')}%  ",
+                f"**Cuota:** {x.get('odds', '—')} · {x.get('book') or 'Casa no indicada'}  ",
+                f"**Ventaja estimada:** {x.get('edge_pp', '—')} puntos porcentuales  ",
+                f"**EV estimado:** {x.get('ev_pct', '—')}%",
+                "",
+                f"**Kelly teórico:** {full:.2f}%  ",
+                f"**¼ Kelly hipotético (máx. 5%):** {quarter:.2f}%",
+                "",
+                "**Marcador:** " + (f"{result['away_score']:g}–{result['home_score']:g} (visita–local)" if result else "Por jugar"),
+                "",
+                "<sub>Capturado: " + str(x.get("captured_at", "—"))[:16].replace("T", " ") + " UTC</sub>",
+                "",
+                "---",
+                "",
+            ])
+    lines.extend([
+        "### ℹ️ Información del monitor",
         "",
-        "**Limitaciones:** el origen en tiempo real de los datos de QB, PBP y "
-        "pronósticos meteorológicos todavía no está verificado.",
+        "Se ejecuta los **domingos a las 8:00 a. m., hora de Hidalgo**. "
+        "Los resultados finalizados se liquidan en la siguiente ejecución.",
         "",
-        "[Ver registros técnicos](independent_snapshots.jsonl) · "
-        "[Ver resultados completos](independent_results.jsonl)",
+        "El Kelly se calcula con la cuota y la probabilidad originales. "
+        "No es una apuesta real ni una garantía de rentabilidad. "
+        "Los datos de QB, PBP y meteorología actual todavía no tienen "
+        "procedencia prepartido verificada.",
         "",
     ])
-    return "\n".join(parts)
-
-def main():
-    ROOT.mkdir(parents=True, exist_ok=True)
-    target = ROOT / "PANEL_NFL.md"
-    target.write_text(render(), encoding="utf-8")
-    print(f"Panel actualizado: {target}")
+    return "\n".join(lines)
 
 if __name__ == "__main__":
-    main()
+    ROOT.mkdir(parents=True, exist_ok=True)
+    path = ROOT / "PANEL_NFL.md"
+    path.write_text(render(), encoding="utf-8")
+    print("Panel móvil actualizado:", path)
