@@ -60,6 +60,8 @@ def add(rows,season,week,gid,market,side,p,mc,odd,other,hs,aws,line=0,calibrated
         try:
             if float(odd)>=0:return
         except Exception:return
+    if market in ('SPREAD','TOTAL') and not calibrated:
+        add(rows,season,week,gid,market,side,p,mc,odd,other,hs,aws,line,calibrated=True)
     x=accepted(p,mc,odd,other,market=market,calibrated=calibrated)
     if x is None:return
     prob,d,edge,ev=x;win=grade(market,side,hs,aws,line)
@@ -105,13 +107,6 @@ def main():
                     po,pu=empirical_residual_two_way(pred['ML_Puntos_Totales_Esperados'],float(total_line),model.residuales_total);mco=emp['Over_Under']['Prob Over'];mcu=emp['Over_Under']['Prob Under'];oo=g.get('over_odds');uo=g.get('under_odds')
                     if not pd.isna(oo) and not pd.isna(uo):
                         add(rows,season,week,g.get('game_id'),'TOTAL','O',po,mco,oo,uo,float(hs),float(aws),float(total_line));add(rows,season,week,g.get('game_id'),'TOTAL','U',pu,mcu,uo,oo,float(hs),float(aws),float(total_line))
-    # Evaluate the exact production market calibration alongside the original baseline.
-    baseline=list(rows)
-    for r in baseline:
-        if r['market'] not in ('SPREAD','TOTAL'):continue
-        # Re-evaluate the original accepted candidate using its raw model and MC probabilities.
-        # Raw probability is recorded separately by add() for a fair paired comparison.
-        add(rows,r['season'],r['week'],r['game_id'],r['market'],r['side'],r['raw_probability'],r['mc_probability'],r['odds'],r['other_odds'],r['home_score'],r['away_score'],r['line'],calibrated=True)
     out=pd.DataFrame(rows);out.to_csv('backtest_nfl_production_all_markets_results.csv',index=False)
     if out.empty:raise SystemExit('No se generaron picks; revisar nombres de columnas históricas')
     print('\n=== NFL PRODUCTION ALL MARKETS WALK-FORWARD ===')
