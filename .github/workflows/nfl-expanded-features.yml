@@ -1,0 +1,29 @@
+name: NFL Expanded Features Research
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'modules/nfl_experimental_features.py'
+      - 'backtest_nfl_expanded_features.py'
+      - '.github/workflows/nfl-expanded-features.yml'
+permissions:
+  contents: read
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q modules/nfl_experimental_features.py backtest_nfl_expanded_features.py
+      - run: python backtest_nfl_expanded_features.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfl-expanded-features-comparison
+          path: nfl_expanded_feature_comparison.csv
+          if-no-files-found: warn
