@@ -212,11 +212,11 @@ def settle():
 
 
 @app.get("/api/scan/{season}/{week}")
-def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
+def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL, shadow: bool = False):
     try:
         if bankroll <= 0:
             raise HTTPException(status_code=400, detail="El bankroll debe ser mayor que 0")
-        settlement = settle_pending()
+        settlement = {"ok": True, "message": "shadow: settlement disabled"} if shadow else settle_pending()
         sched = nfl.import_schedules([season])
         games = sched[sched["week"] == week].copy()
         if "game_type" in games.columns:
@@ -290,17 +290,23 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         bets = [p for p in picks if p["action"] == "BET"]
         leans = [p for p in picks if p["action"] == "LEAN"]
         # Persist every validated BET recommendation; sync_bets enforces immutable snapshots and duplicate protection.
-        sheet_sync = sync_bets(bets, season, week, bankroll)
+        sheet_sync = ({"ok": True, "message": "shadow: persistence handled by research collector", "inserted": 0} if shadow else sync_bets(bets, season, week, bankroll))
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
             "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "Kelly 1/4 real con tope duro de 5% del bankroll",
             "markets": ["ML", "SPREAD", "TOTAL"],
             "market_policy": "ML: BET en banda OOS estable; SPREAD/TOTAL: LEAN observable sin riesgo de bankroll",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
-            "bets": bets, "leans": leans, "diagnostics": diagnostics, "sheet_sync": sheet_sync, "settlement": settlement}
+            "bets": ([dict(p, action="MONITOR", stake=0.0, kelly=0.0) for p in bets] if shadow else bets), "leans": ([dict(p, action="MONITOR", stake=0.0, kelly=0.0) for p in leans] if shadow else leans), "diagnostics": diagnostics, "sheet_sync": sheet_sync, "settlement": settlement, "shadow": shadow}
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
+
+
+@app.get("/api/shadow/{season}/{week}")
+def shadow_scan(season: int, week: int):
+    """Read-only research scan; no Sheets writes, no settlement, no staking."""
+    return scan(season, week, shadow=True)
 
 
 @app.get("/", response_class=HTMLResponse)
