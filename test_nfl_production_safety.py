@@ -47,11 +47,13 @@ def test_moneyline_positive_odds_outside_validated_band_is_rejected():
     )
     assert pick is None
 
-def test_stake_band_and_price_modifier():
-    pct_115, stake_115, _ = api.kelly_stake(70.0, -115, 5000)
-    pct_200, stake_200, _ = api.kelly_stake(70.0, -200, 5000)
-    assert 3.0 <= pct_115 <= 10.0
-    assert 3.0 <= pct_200 <= 10.0
-    assert 150.0 <= stake_115 <= 500.0
-    assert 150.0 <= stake_200 <= 500.0
-    assert pct_200 > pct_115
+def test_true_quarter_kelly_and_hard_cap():
+    pct, stake, capped = api.kelly_stake(60.0, -110, 5000)
+    assert 0.0 < pct <= 5.0
+    assert 0.0 < stake <= 250.0
+    assert stake == round(5000 * pct / 100.0, 2)
+
+    pct_hi, stake_hi, capped_hi = api.kelly_stake(80.0, -110, 5000)
+    assert pct_hi == 5.0
+    assert stake_hi == 250.0
+    assert capped_hi is True
