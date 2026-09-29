@@ -13,7 +13,8 @@ on:
         description: 'Optional NFL week'
         required: false
   schedule:
-    - cron: '7 15,22 * * *'
+    # Sunday 08:00 America/Mexico_City (UTC-6, no DST)
+    - cron: '0 14 * * 0'
 permissions:
   contents: write
 concurrency:
