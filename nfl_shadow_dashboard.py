@@ -24,6 +24,20 @@ def table(rows, columns):
     body = ["| " + " | ".join(cell(row.get(key)) for _, key in columns) + " |" for row in rows]
     return "\n".join([header, divider] + body) + "\n"
 
+def hypothetical_kelly(probability_pct, american_odds):
+    """Full Kelly and capped quarter-Kelly, percentages of a hypothetical bankroll.
+    Negative/invalid edge returns zero; does not authorize real staking.
+    """
+    if probability_pct is None or american_odds is None:
+        return 0.0, 0.0
+    p = float(probability_pct) / 100.0
+    odds = float(american_odds)
+    if not 0 <= p <= 1 or (-100 < odds < 100):
+        return 0.0, 0.0
+    b = odds / 100.0 if odds > 0 else 100.0 / abs(odds)
+    full = max(0.0, (b * p - (1.0 - p)) / b)
+    return round(100 * full, 2), round(100 * min(full * 0.25, 0.05), 2)
+
 def render():
     picks = read("independent_recommendations.jsonl")
     results = {r["recommendation_id"]: r for r in read("independent_results.jsonl")}
@@ -35,6 +49,10 @@ def render():
         "> **SOLO MONITOREO — $0 apostados.** Actualizado: " + now,
         "",
         "Consulta los resultados desde el celular. Las probabilidades son estimaciones de los modelos, no garantías.",
+        "",
+        "**Kelly hipotético:** Kelly completo y ¼ de Kelly limitado al 5% de una banca ficticia. "
+        "Se calcula con la probabilidad y cuota congeladas al registrar el pick. "
+        "**No es una apuesta ni una instrucción para apostar.**",
         "",
         "## Resumen por motor",
         "",
@@ -76,15 +94,18 @@ def render():
             status = {"WIN": "GANADA", "LOSS": "PERDIDA", "PUSH": "ANULADA"}.get(
                 result["result"], "PENDIENTE") if result else "PENDIENTE"
             score = (f'{result["away_score"]:g}–{result["home_score"]:g}' if result else "—")
+            full_kelly, quarter_kelly = hypothetical_kelly(p.get("probability"), p.get("odds"))
             rows.append({
                 "date": p.get("captured_at", "")[:10], "game": p.get("game"),
                 "pick": p.get("pick"), "prob": f'{p.get("probability", 0):g}%',
                 "odds": p.get("odds"), "edge": f'{p.get("edge_pp", 0):g} pp',
                 "status": status, "score": score,
+                "kelly": f"{full_kelly:.2f}%", "quarter": f"{quarter_kelly:.2f}%",
             })
         parts.extend([table(rows, [
             ("Fecha", "date"), ("Partido", "game"), ("Selección", "pick"),
             ("Probabilidad", "prob"), ("Cuota", "odds"), ("Ventaja", "edge"),
+            ("Kelly teórico", "kelly"), ("¼ Kelly (máx. 5%)", "quarter"),
             ("Resultado", "status"), ("Marcador visita–local", "score"),
         ]), ""])
     parts.extend([
