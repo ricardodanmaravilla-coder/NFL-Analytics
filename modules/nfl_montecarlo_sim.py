@@ -99,7 +99,7 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
     p_away = float(np.sum(margin_dist < 0) / n_margin)
     p_tie = float(np.sum(margin_dist == 0) / n_margin)
 
-    ou = {"Linea": linea_ou, "Prob Over": None, "Prob Under": None, "Prob Push": None}
+    ou = {"Linea": linea_ou, "Prob Over": None, "Prob Under": None, "Prob Push": None, "Muestra efectiva": int(total_dist.size), "DesvStd_Total": round(float(np.std(total_dist, ddof=1)), 3) if total_dist.size > 1 else None}
     if linea_ou is not None and pd.notna(linea_ou):
         line = float(linea_ou)
         ou.update({
@@ -116,6 +116,7 @@ def simular_nfl_montecarlo(local, visita, df_games, linea_ou=None, spread_local=
         "Cubre Visita": None,
         "Push": None,
         "Muestra efectiva": int(spread_margin.size),
+        "DesvStd_Margen": round(float(np.std(spread_margin, ddof=1)), 3) if spread_margin.size > 1 else None,
         "Metodo": "margenes reales emparejados sin producto cartesiano",
     }
     if spread_local is not None and pd.notna(spread_local):
