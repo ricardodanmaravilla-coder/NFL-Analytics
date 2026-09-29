@@ -6,7 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 import nfl_data_py as nfl
-from modules.nfl_calibration import empirical_residual_two_way, historico_antes
+from modules.nfl_calibration import empirical_residual_two_way, historico_antes, market_anchored_probability
 from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_moneyline_runtime import MoneylineRuntime
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
@@ -29,14 +29,21 @@ def norm2(a,b):
     if a is None or b is None:return None,None
     s=float(a)+float(b);return (100*float(a)/s,100*float(b)/s) if s else (None,None)
 
-def accepted(p,mc,odd,other):
+def accepted(p,mc,odd,other,market='ML',calibrated=False):
     if None in (p,mc):return None
     p=float(p);mc=float(mc)
-    if (p>=50)!=(mc>=50) or abs(p-mc)>MAX_DISAGREE:return None
     m,_=no_vig(odd,other);d=dec(odd)
     if m is None or d is None:return None
+    if calibrated and market in ('SPREAD','TOTAL'):
+        p=market_anchored_probability(p,mc,100*m)
+        if p is None:return None
+        min_p=50.0
+    else:
+        if (p>=50)!=(mc>=50) or abs(p-mc)>MAX_DISAGREE:return None
+        min_p=MIN_P
+        if mc<MIN_MC:return None
     edge=(p/100-m)*100;ev=(p/100*d-1)*100
-    if p<MIN_P or mc<MIN_MC or edge<MIN_EDGE or ev<MIN_EV:return None
+    if p<min_p or edge<MIN_EDGE or ev<MIN_EV:return None
     return p,d,edge,ev
 
 def grade(market,side,hs,aws,line):
@@ -48,18 +55,18 @@ def grade(market,side,hs,aws,line):
     if abs(adj)<1e-9:return None
     return int(adj>0)
 
-def add(rows,season,week,gid,market,side,p,mc,odd,other,hs,aws,line=0):
+def add(rows,season,week,gid,market,side,p,mc,odd,other,hs,aws,line=0,calibrated=False):
     if market=='ML':
         try:
             if float(odd)>=0:return
         except Exception:return
-    x=accepted(p,mc,odd,other)
+    x=accepted(p,mc,odd,other,market=market,calibrated=calibrated)
     if x is None:return
     prob,d,edge,ev=x;win=grade(market,side,hs,aws,line)
     if win is None:return
     role=None
     if market=='SPREAD':role='FAVORITE' if float(line)<0 else ('UNDERDOG' if float(line)>0 else 'PICKEM')
-    rows.append({'season':season,'week':week,'game_id':gid,'market':market,'side':side,'line':line,'spread_role':role,'probability':prob,'mc_probability':mc,'edge':edge,'ev':ev,'odds':odd,'win':win,'return':d-1 if win else -1.0})
+    rows.append({'season':season,'week':week,'game_id':gid,'market':market,'variant':'CALIBRATED' if calibrated and market!='ML' else 'BASELINE','side':side,'line':line,'spread_role':role,'probability':prob,'raw_probability':p,'mc_probability':mc,'other_odds':other,'home_score':hs,'away_score':aws,'edge':edge,'ev':ev,'odds':odd,'win':win,'return':d-1 if win else -1.0})
 
 def main():
     raw=nfl.import_schedules([2021,2022,2023,2024,2025]);raw=raw[raw['result'].notna()].copy()
@@ -98,13 +105,20 @@ def main():
                     po,pu=empirical_residual_two_way(pred['ML_Puntos_Totales_Esperados'],float(total_line),model.residuales_total);mco=emp['Over_Under']['Prob Over'];mcu=emp['Over_Under']['Prob Under'];oo=g.get('over_odds');uo=g.get('under_odds')
                     if not pd.isna(oo) and not pd.isna(uo):
                         add(rows,season,week,g.get('game_id'),'TOTAL','O',po,mco,oo,uo,float(hs),float(aws),float(total_line));add(rows,season,week,g.get('game_id'),'TOTAL','U',pu,mcu,uo,oo,float(hs),float(aws),float(total_line))
+    # Evaluate the exact production market calibration alongside the original baseline.
+    baseline=list(rows)
+    for r in baseline:
+        if r['market'] not in ('SPREAD','TOTAL'):continue
+        # Re-evaluate the original accepted candidate using its raw model and MC probabilities.
+        # Raw probability is recorded separately by add() for a fair paired comparison.
+        add(rows,r['season'],r['week'],r['game_id'],r['market'],r['side'],r['raw_probability'],r['mc_probability'],r['odds'],r['other_odds'],r['home_score'],r['away_score'],r['line'],calibrated=True)
     out=pd.DataFrame(rows);out.to_csv('backtest_nfl_production_all_markets_results.csv',index=False)
     if out.empty:raise SystemExit('No se generaron picks; revisar nombres de columnas históricas')
     print('\n=== NFL PRODUCTION ALL MARKETS WALK-FORWARD ===')
-    for market,g in out.groupby('market'):print(market,{'n':len(g),'winrate':round(100*g.win.mean(),2),'roi':round(100*g['return'].mean(),2),'avg_p':round(g.probability.mean(),2)})
-    spreads=out[out.market=='SPREAD']
+    for (market,variant),g in out.groupby(['market','variant']):print(market,variant,{'n':len(g),'winrate':round(100*g.win.mean(),2),'roi':round(100*g['return'].mean(),2),'avg_p':round(g.probability.mean(),2)})
+    spreads=out[(out.market=='SPREAD') & (out.variant=='BASELINE')]
     if not spreads.empty:
         print('\nSPREAD FAVORITE / UNDERDOG')
         for role,g in spreads.groupby('spread_role'):print(role,{'n':len(g),'winrate':round(100*g.win.mean(),2),'roi':round(100*g['return'].mean(),2),'avg_p':round(g.probability.mean(),2),'avg_mc':round(g.mc_probability.mean(),2)})
-    out['bin']=pd.cut(out.probability,[58,60,65,70,75,101],right=False,include_lowest=True);print('\nCALIBRATION BINS');print(out.groupby(['market','bin'],observed=True).agg(n=('win','size'),pred=('probability','mean'),actual=('win','mean'),roi=('return','mean')).to_string());assert set(out.market).issubset({'ML','SPREAD','TOTAL'})
+    out['bin']=pd.cut(out.probability,[58,60,65,70,75,101],right=False,include_lowest=True);print('\nCALIBRATION BINS');print(out.groupby(['market','variant','bin'],observed=True).agg(n=('win','size'),pred=('probability','mean'),actual=('win','mean'),roi=('return','mean')).to_string());assert set(out.market).issubset({'ML','SPREAD','TOTAL'})
 if __name__=='__main__':main()
