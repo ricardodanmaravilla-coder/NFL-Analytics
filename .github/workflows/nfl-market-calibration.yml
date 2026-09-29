@@ -1,0 +1,28 @@
+name: NFL Market Calibration Research
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backtest_nfl_market_calibration.py'
+      - '.github/workflows/nfl-market-calibration.yml'
+permissions:
+  contents: read
+jobs:
+  calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q backtest_nfl_market_calibration.py
+      - run: python backtest_nfl_market_calibration.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfl-market-calibration-diagnostic
+          path: nfl_market_calibration_2025_diagnostic.csv
+          if-no-files-found: warn
