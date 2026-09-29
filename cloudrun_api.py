@@ -138,11 +138,31 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
 
 def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, odd_other,
                      bankroll=DEFAULT_BANKROLL, book=None, source=None, fetched_at=None, auto_bet=None):
-    """Keep non-ML markets observable without risking bankroll until their own OOS evidence is stable."""
+    """Market-anchored probability for spread/total.
+
+    NFL sides/totals are efficient markets. Raw model probabilities are therefore
+    treated as noisy evidence, not as literal win probabilities. Blend independent
+    model signals first, then shrink their deviation toward the no-vig market.
+    """
+    p = num(primary_prob)
+    mc = num(mc_prob)
+    mkt, _ = no_vig(odd_self, odd_other)
+    if p is None or mc is None or mkt is None:
+        return None
+    market_pct = 100.0 * mkt
+    if (p >= 50.0) != (mc >= 50.0):
+        return None
+    disagreement = abs(p - mc)
+    if disagreement > 10.0:
+        return None
+    signal = 0.60 * p + 0.40 * mc
+    # Reliability falls as the two independent estimates disagree. Even at full
+    # agreement only half of the model-vs-market deviation is trusted.
+    reliability = max(0.20, 0.50 * (1.0 - disagreement / 10.0))
+    calibrated = market_pct + reliability * (signal - market_pct)
     if auto_bet is None:
-        # 2023-2025 walk-forward is unstable for SPREAD/TOTAL.
         auto_bet = False
-    return _build_candidate(game, pick, primary_prob, [mc_prob], mc_prob, odd_self, odd_other, bankroll,
+    return _build_candidate(game, pick, calibrated, [p, mc], mc, odd_self, odd_other, bankroll,
         auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at)
 
 
