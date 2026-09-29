@@ -156,11 +156,10 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
 
 def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, odd_other,
                      bankroll=DEFAULT_BANKROLL, book=None, source=None, fetched_at=None, auto_bet=None):
-    """All validated markets remain visible as recommendations; only BET actions are synced as wagers."""
+    """Keep non-ML markets observable without risking bankroll until their own OOS evidence is stable."""
     if auto_bet is None:
-        # Spread/Total become executable BETs only after passing the same production
-        # probability, Monte Carlo, disagreement, edge and EV gates in _build_candidate.
-        auto_bet = True
+        # 2023-2025 walk-forward is unstable for SPREAD/TOTAL.
+        auto_bet = False
     return _build_candidate(game, pick, primary_prob, [mc_prob], mc_prob, odd_self, odd_other, bankroll,
         auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at)
 
@@ -200,8 +199,8 @@ def health():
         "status": "ok", "service": "NFL Analytics Cloud Run", "version": "3.9",
         "kickoff_weather": True, "live_odds_provider": "TheRundown",
         "markets": ["moneyline", "spread", "total"],
-        "market_policy": "ML/SPREAD/TOTAL become executable BETs only when production filters pass",
-        "spread_auto_bet": True, "total_auto_bet": True,
+        "market_policy": "ML executable only inside stable OOS edge band; SPREAD/TOTAL observable LEANs pending market-specific OOS validation",
+        "spread_auto_bet": False, "total_auto_bet": False,
         "pbp_asof_cutoff": True,
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
@@ -299,7 +298,7 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL):
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
             "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "Kelly 1/4 primario; stake 3%-10% por BET con ajuste secundario acotado por cuota",
             "markets": ["ML", "SPREAD", "TOTAL"],
-            "market_policy": "ML/SPREAD/TOTAL: recomendación habilitada cuando pasan filtros de producción",
+            "market_policy": "ML: BET en banda OOS estable; SPREAD/TOTAL: LEAN observable sin riesgo de bankroll",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
             "bets": bets, "leans": leans, "diagnostics": diagnostics, "sheet_sync": sheet_sync, "settlement": settlement}
     except HTTPException:
