@@ -57,3 +57,16 @@ def test_true_quarter_kelly_and_hard_cap():
     assert pct_hi == 5.0
     assert stake_hi == 250.0
     assert capped_hi is True
+
+
+def test_spread_total_probability_is_shrunk_toward_market():
+    pick = api.market_candidate("A @ B", "Over 45.5", "TOTAL", 45.5, 70.0, 68.0, -110, -110, bankroll=5000)
+    assert pick is not None
+    assert 50.0 < pick["probability"] < 70.0
+    assert pick["action"] == "LEAN"
+    assert pick["stake"] == 0.0
+
+
+def test_spread_total_rejects_large_model_disagreement():
+    pick = api.market_candidate("A @ B", "B -3", "SPREAD", -3.0, 70.0, 58.0, -110, -110, bankroll=5000)
+    assert pick is None
