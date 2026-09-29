@@ -11,7 +11,7 @@ import nfl_data_py as nfl
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 
-from modules.nfl_calibration import empirical_residual_two_way, historico_antes, primary_with_agreement
+from modules.nfl_calibration import market_anchored_probability, empirical_residual_two_way, historico_antes, primary_with_agreement
 from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_google_sheets import settle_pending, sync_bets
 from modules.nfl_moneyline_runtime import MoneylineRuntime
@@ -150,17 +150,9 @@ def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, 
     mkt, _ = no_vig(odd_self, odd_other)
     if p is None or mc is None or mkt is None:
         return None
-    market_pct = 100.0 * mkt
-    if (p >= 50.0) != (mc >= 50.0):
+    calibrated = market_anchored_probability(p, mc, 100.0 * mkt)
+    if calibrated is None:
         return None
-    disagreement = abs(p - mc)
-    if disagreement > 10.0:
-        return None
-    signal = 0.60 * p + 0.40 * mc
-    # Reliability falls as the two independent estimates disagree. Even at full
-    # agreement only half of the model-vs-market deviation is trusted.
-    reliability = max(0.20, 0.50 * (1.0 - disagreement / 10.0))
-    calibrated = market_pct + reliability * (signal - market_pct)
     if auto_bet is None:
         auto_bet = False
     return _build_candidate(game, pick, calibrated, [calibrated], calibrated, odd_self, odd_other, bankroll,
