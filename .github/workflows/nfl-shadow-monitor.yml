@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'nfl_independent_live_monitor.py'
+      - 'nfl_shadow_dashboard.py'
       - '.github/workflows/nfl-shadow-monitor.yml'
   workflow_dispatch:
     inputs:
@@ -34,7 +35,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Validate syntax
-        run: python -m compileall -q nfl_shadow_monitor.py nfl_independent_live_monitor.py
+        run: python -m compileall -q nfl_shadow_monitor.py nfl_independent_live_monitor.py nfl_shadow_dashboard.py
       - name: Capture predictions and settle prior picks
         env:
           NFL_SHADOW_API: https://nfl-analytics-664101772310.northamerica-south1.run.app
@@ -48,6 +49,8 @@ jobs:
           else
             python nfl_independent_live_monitor.py
           fi
+      - name: Update readable dashboard
+        run: python nfl_shadow_dashboard.py
       - name: Persist append-only monitoring records
         shell: bash
         run: |
