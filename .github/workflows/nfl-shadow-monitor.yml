@@ -1,5 +1,9 @@
 name: NFL Independent Shadow Monitor
 on:
+  push:
+    paths:
+      - 'nfl_independent_live_monitor.py'
+      - '.github/workflows/nfl-shadow-monitor.yml'
   workflow_dispatch:
     inputs:
       season:
