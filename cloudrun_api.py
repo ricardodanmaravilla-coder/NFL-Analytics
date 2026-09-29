@@ -82,7 +82,8 @@ def kelly_stake(probability_pct, odd, bankroll):
     capped = quarter_kelly > MAX_STAKE_FRACTION
     return round(fraction * 100.0, 2), round(bank * fraction, 2), capped
 def _build_candidate(game, pick, probability, support_probs, mc_prob, odd_self, odd_other, bankroll,
-                     auto_bet, market, line=None, book=None, source=None, fetched_at=None):
+                     auto_bet, market, line=None, book=None, source=None, fetched_at=None,
+                     min_probability=MIN_PROBABILITY, min_mc_probability=MIN_MC_PROBABILITY):
     p = num(probability)
     mc = num(mc_prob)
     supports = [num(x) for x in support_probs]
@@ -103,7 +104,7 @@ def _build_candidate(game, pick, probability, support_probs, mc_prob, odd_self, 
     edge = (p / 100.0 - mkt) * 100.0
     ev = ((p / 100.0) * dec - 1.0) * 100.0
     disagreement = max(probs) - min(probs)
-    if p < MIN_PROBABILITY or mc < MIN_MC_PROBABILITY or edge < 3.0 or ev < 3.0:
+    if p < min_probability or mc < min_mc_probability or edge < 3.0 or ev < 3.0:
         return None
     kelly_pct, stake, kelly_capped = kelly_stake(p, odd, bankroll)
     action = "BET" if auto_bet else "LEAN"
@@ -162,8 +163,9 @@ def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, 
     calibrated = market_pct + reliability * (signal - market_pct)
     if auto_bet is None:
         auto_bet = False
-    return _build_candidate(game, pick, calibrated, [p, mc], mc, odd_self, odd_other, bankroll,
-        auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at)
+    return _build_candidate(game, pick, calibrated, [calibrated], calibrated, odd_self, odd_other, bankroll,
+        auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at,
+        min_probability=50.0, min_mc_probability=50.0)
 
 
 def fmt_line(v):
