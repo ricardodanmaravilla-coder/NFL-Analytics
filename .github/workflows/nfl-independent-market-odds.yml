@@ -1,0 +1,29 @@
+name: NFL Independent Market Odds Research
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backtest_nfl_independent_market_odds.py'
+      - 'modules/nfl_independent_markets.py'
+      - '.github/workflows/nfl-independent-market-odds.yml'
+permissions:
+  contents: read
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q backtest_nfl_independent_market_odds.py
+      - run: python backtest_nfl_independent_market_odds.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfl-independent-market-odds-results
+          path: nfl_independent_market_odds_results.csv
+          if-no-files-found: warn
