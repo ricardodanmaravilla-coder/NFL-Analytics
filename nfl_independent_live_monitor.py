@@ -42,7 +42,15 @@ def history_and_future(season,week):
     upcoming=sched[(sched.week==week)&(sched.home_score.isna())].copy()
     if "game_type" in upcoming:upcoming=upcoming[upcoming.game_type.isin(["REG","WC","DIV","CON","SB"])]
     if upcoming.empty:return None,None,None
-    # Incorporate verified final scores from the CURRENT season before target week.\n    # Archived CSVs may stop at the prior season; without this, rolling team\n    # form remains stale for every 2026 game. PBP/QB remain explicitly stale\n    # until separate current-season feeds are available.\n    completed=sched[(sched.week<week)&sched.home_score.notna()&sched.away_score.notna()].copy()\n    if not completed.empty:\n        g=pd.concat([g,completed],ignore_index=True,sort=False)\n        g=g.drop_duplicates("game_id",keep="last")\n    # Synthetic zero targets exist ONLY for feature generation and are never
+    # Incorporate verified final scores from the CURRENT season before target week. 
+    # Archived CSVs may stop at the prior season; without this, rolling team 
+    # form remains stale for every 2026 game. PBP/QB remain explicitly stale 
+    # until separate current-season feeds are available.
+    completed=sched[(sched.week<week)&sched.home_score.notna()&sched.away_score.notna()].copy()
+    if not completed.empty:
+        g=pd.concat([g,completed],ignore_index=True,sort=False)
+        g=g.drop_duplicates("game_id",keep="last") 
+    # Synthetic zero targets exist ONLY for feature generation and are never
     # passed to model.fit or calibration. All earlier-week history is real.
     future=upcoming.copy()
     future["home_score"]=0.0;future["away_score"]=0.0
@@ -132,7 +140,10 @@ def independent_scan(season,week):
                 out.append(x)
         diagnostics.append({"game":game,"status":"QUOTED" if available else "NO_COMPLETE_MARKET",
                             "quoted_sides":available})
-    return {"season":season,"week":week,"captured_at":stamp,\n            "provenance":{"current_season_final_scores_included":True,\n             "current_season_qb_pbp_verified":False,"pregame_weather_verified":False,\n             "odds_source":"TheRundown","money_staked":0},
+    return {"season":season,"week":week,"captured_at":stamp,
+            "provenance":{"current_season_final_scores_included":True,
+             "current_season_qb_pbp_verified":False,"pregame_weather_verified":False,
+             "odds_source":"TheRundown","money_staked":0},
             "recommendations":out,"diagnostics":diagnostics}
 def persist(result):
     season,week=result["season"],result["week"]
