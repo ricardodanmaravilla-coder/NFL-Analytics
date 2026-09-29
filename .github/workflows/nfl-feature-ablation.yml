@@ -1,0 +1,29 @@
+name: NFL Feature Ablation Research
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backtest_nfl_feature_ablation.py'
+      - 'modules/nfl_experimental_features.py'
+      - '.github/workflows/nfl-feature-ablation.yml'
+permissions:
+  contents: read
+jobs:
+  ablation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q backtest_nfl_feature_ablation.py modules/nfl_experimental_features.py
+      - run: python backtest_nfl_feature_ablation.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nfl-feature-ablation-results
+          path: nfl_feature_ablation_results.csv
+          if-no-files-found: warn
