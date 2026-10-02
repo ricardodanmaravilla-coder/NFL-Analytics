@@ -134,7 +134,7 @@ def candidate(game, pick, primary_prob, support_probs, odd_self, odd_other, bank
     mc_prob = support_probs[-1] if support_probs else None
     odd = num(odd_self)
     return _build_candidate(game, pick, p, support_probs, mc_prob, odd_self, odd_other, bankroll,
-        auto_bet=bool(odd is not None and odd < 0), market="ML", book=book, source=source, fetched_at=fetched_at)
+        auto_bet=True, market="ML", book=book, source=source, fetched_at=fetched_at)
 
 
 def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, odd_other,
@@ -154,7 +154,7 @@ def market_candidate(game, pick, market, line, primary_prob, mc_prob, odd_self, 
     if calibrated is None:
         return None
     if auto_bet is None:
-        auto_bet = False
+        auto_bet = True
     return _build_candidate(game, pick, calibrated, [calibrated], calibrated, odd_self, odd_other, bankroll,
         auto_bet=bool(auto_bet), market=market, line=line, book=book, source=source, fetched_at=fetched_at,
         min_probability=50.0, min_mc_probability=50.0)
@@ -195,8 +195,8 @@ def health():
         "status": "ok", "service": "NFL Analytics Cloud Run", "version": "3.9",
         "kickoff_weather": True, "live_odds_provider": "TheRundown",
         "markets": ["moneyline", "spread", "total"],
-        "market_policy": "ML executable only inside stable OOS edge band; SPREAD/TOTAL observable LEANs pending market-specific OOS validation",
-        "spread_auto_bet": False, "total_auto_bet": False,
+        "market_policy": "Every validated ML/SPREAD/TOTAL recommendation is tracked in NFL_Picks; no LEAN bucket",
+        "spread_auto_bet": True, "total_auto_bet": True,
         "pbp_asof_cutoff": True,
         "therundown_configured": therundown_configured(),
         "min_probability": MIN_PROBABILITY, "min_mc_probability": MIN_MC_PROBABILITY,
@@ -289,12 +289,12 @@ def scan(season: int, week: int, bankroll: float = DEFAULT_BANKROLL, shadow: boo
         picks = sorted(picks, key=lambda x: x["score"], reverse=True)
         bets = [p for p in picks if p["action"] == "BET"]
         leans = [p for p in picks if p["action"] == "LEAN"]
-        # Persist every validated BET recommendation; sync_bets enforces immutable snapshots and duplicate protection.
+        # Persist every validated recommendation; no LEAN bucket. sync_bets enforces immutable snapshots and duplicate protection.
         sheet_sync = ({"ok": True, "message": "shadow: persistence handled by research collector", "inserted": 0} if shadow else sync_bets(bets, season, week, bankroll))
         return {"season": season, "week": week, "bankroll": round(bankroll, 2), "min_probability": MIN_PROBABILITY,
             "min_mc_probability": MIN_MC_PROBABILITY, "kelly_policy": "Kelly 1/4 real con tope duro de 5% del bankroll",
             "markets": ["ML", "SPREAD", "TOTAL"],
-            "market_policy": "ML: BET en banda OOS estable; SPREAD/TOTAL: LEAN observable sin riesgo de bankroll",
+            "market_policy": "Toda recomendación validada ML/SPREAD/TOTAL se registra en NFL_Picks; sin LEAN",
             "odds_policy": "TheRundown live/delayed feed only; no nflverse fallback for current prices",
             "bets": ([dict(p, action="MONITOR", stake=0.0, kelly=0.0) for p in bets] if shadow else bets), "leans": ([dict(p, action="MONITOR", stake=0.0, kelly=0.0) for p in leans] if shadow else leans), "diagnostics": diagnostics, "sheet_sync": sheet_sync, "settlement": settlement, "shadow": shadow}
     except HTTPException:
