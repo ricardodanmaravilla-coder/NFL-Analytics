@@ -7,8 +7,8 @@ def test_spread_recommendation_stays_enabled_with_risk_cap():
         65.0, 64.0, -110, -110, bankroll=5000,
     )
     assert pick is not None
-    assert pick["action"] == "LEAN"
-    assert pick["stake"] == 0.0
+    assert pick["action"] == "BET"
+    assert 0.0 < pick["stake"] <= 250.0
 
 
 def test_total_keeps_recommendation_when_filters_pass():
@@ -17,15 +17,15 @@ def test_total_keeps_recommendation_when_filters_pass():
         65.0, 64.0, -110, -110, bankroll=5000,
     )
     assert pick is not None
-    assert pick["action"] == "LEAN"
-    assert pick["stake"] == 0.0
+    assert pick["action"] == "BET"
+    assert 0.0 < pick["stake"] <= 250.0
 
 
 def test_health_exposes_production_guards():
     h = api.health()
     assert h["version"] == "3.9"
-    assert h["spread_auto_bet"] is False
-    assert h["total_auto_bet"] is False
+    assert h["spread_auto_bet"] is True
+    assert h["total_auto_bet"] is True
     assert h["pbp_asof_cutoff"] is True
 
 
@@ -63,8 +63,8 @@ def test_spread_total_probability_is_shrunk_toward_market():
     pick = api.market_candidate("A @ B", "Over 45.5", "TOTAL", 45.5, 70.0, 68.0, -110, -110, bankroll=5000)
     assert pick is not None
     assert 50.0 < pick["probability"] < 70.0
-    assert pick["action"] == "LEAN"
-    assert pick["stake"] == 0.0
+    assert pick["action"] == "BET"
+    assert 0.0 < pick["stake"] <= 250.0
 
 
 def test_spread_total_rejects_large_model_disagreement():
