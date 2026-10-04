@@ -1,65 +1,327 @@
-# NFL · Panel de los tres motores independientes
+# 🏈 PANEL NFL
 
-> **SOLO MONITOREO — $0 apostados.** Actualizado: 29/09/2026 17:05 UTC
+### Tres motores independientes · Solo monitoreo
 
-Consulta los resultados desde el celular. Las probabilidades son estimaciones de los modelos, no garantías.
+> **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Kelly hipotético:** Kelly completo y ¼ de Kelly limitado al 5% de una banca ficticia. Se calcula con la probabilidad y cuota congeladas al registrar el pick. **No es una apuesta ni una instrucción para apostar.**
+**Última actualización:** 04/10/2026 17:57 UTC
 
-## Resumen por motor
+## 📊 Resumen
 
-| Motor | Picks | Pendientes | Ganadas | Perdidas | Anuladas | Acierto | ROI simulado |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| ML | 4 | 4 | 0 | 0 | 0 | — | — |
-| SPREAD | 5 | 5 | 0 | 0 | 0 | — | — |
-| TOTAL | 5 | 5 | 0 | 0 | 0 | — | — |
+**🏆 MONEYLINE · Ganador**
 
+**4 picks** · 🟡 4 pendientes · 🟢 0 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
 
-**Último escaneo:** 2026-09-29T17:05:41.948022+00:00 · 90 lados cotizados.
-**Mercados incompletos:** KC @ LV
+**ROI simulado:** Sin resultados todavía
 
----
+**📏 SPREAD · Hándicap**
 
-## MONEYLINE · Ganador
+**5 picks** · 🟡 5 pendientes · 🟢 0 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
 
-| Fecha | Partido | Selección | Probabilidad | Cuota | Ventaja | Kelly teórico | ¼ Kelly (máx. 5%) | Resultado | Marcador visita–local |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-09-29 | ARI @ NYG | NYG ML | 62.82% | -105 | 13.91 pp | 23.78% | 5.00% | PENDIENTE | — |
-| 2026-09-29 | DEN @ SF | SF ML | 63.48% | -155 | 5.18 pp | 6.87% | 1.72% | PENDIENTE | — |
-| 2026-09-29 | NYJ @ CHI | CHI ML | 80.2% | -170 | 19.82 pp | 46.54% | 5.00% | PENDIENTE | — |
-| 2026-09-29 | ATL @ NO | NO ML | 63.33% | -155 | 5.03 pp | 6.49% | 1.62% | PENDIENTE | — |
+**ROI simulado:** Sin resultados todavía
 
+**🎯 TOTALES · Over/Under**
+
+**5 picks** · 🟡 5 pendientes · 🟢 0 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
+
+**ROI simulado:** Sin resultados todavía
+
+**Último escaneo:** 2026-10-04 17:57 UTC
 
 ---
 
-## SPREAD · Hándicap
+## 🏆 MONEYLINE · Ganador
 
-| Fecha | Partido | Selección | Probabilidad | Cuota | Ventaja | Kelly teórico | ¼ Kelly (máx. 5%) | Resultado | Marcador visita–local |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-09-29 | GB @ TB | TB +3.5 | 58.2% | 100 | 10.37 pp | 16.40% | 4.10% | PENDIENTE | — |
-| 2026-09-29 | ARI @ NYG | NYG +1.5 | 63.35% | -118 | 11.61 pp | 20.10% | 5.00% | PENDIENTE | — |
-| 2026-09-29 | JAX @ CIN | JAX +2.5 | 63.47% | -105 | 14.55 pp | 25.11% | 5.00% | PENDIENTE | — |
-| 2026-09-29 | NE @ BUF | NE +7 | 63% | -115 | 11.91 pp | 20.45% | 5.00% | PENDIENTE | — |
-| 2026-09-29 | NYJ @ CHI | CHI -3.5 | 67.56% | -102 | 19.3 pp | 34.47% | 5.00% | PENDIENTE | — |
+### ARI @ NYG
 
+**🎯 PICK: NYG ML**
 
----
+**🟡 PENDIENTE**
 
-## TOTALES · Over/Under
+**Probabilidad:** 62.82%  
+**Cuota:** -105 · DraftKings  
+**Ventaja estimada:** 13.91 puntos porcentuales  
+**EV estimado:** 22.65%
 
-| Fecha | Partido | Selección | Probabilidad | Cuota | Ventaja | Kelly teórico | ¼ Kelly (máx. 5%) | Resultado | Marcador visita–local |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-09-29 | NE @ BUF | Under 48.5 | 60.89% | -110 | 10.89 pp | 17.87% | 4.47% | PENDIENTE | — |
-| 2026-09-29 | ATL @ NO | Under 48.5 | 59.02% | -108 | 9.45 pp | 14.76% | 3.69% | PENDIENTE | — |
-| 2026-09-29 | DEN @ SF | Under 46.5 | 64.05% | -108 | 14.48 pp | 25.22% | 5.00% | PENDIENTE | — |
-| 2026-09-29 | DET @ CAR | Under 50.5 | 60.89% | -108 | 11.32 pp | 18.65% | 4.66% | PENDIENTE | — |
-| 2026-09-29 | JAX @ CIN | Under 51.5 | 58.31% | -118 | 6.58 pp | 9.12% | 2.28% | PENDIENTE | — |
+**Kelly teórico:** 23.78%  
+**¼ Kelly hipotético (máx. 5%):** 5.00%
 
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
 ---
 
-**Actualización:** domingo a las 8:00 a. m. (Hidalgo). Los partidos terminados se liquidan durante la siguiente ejecución. Las cuotas originales se conservan para evaluar cada recomendación.
+### DEN @ SF
 
-**Limitaciones:** el origen en tiempo real de los datos de QB, PBP y pronósticos meteorológicos todavía no está verificado.
+**🎯 PICK: SF ML**
 
-[Ver registros técnicos](independent_snapshots.jsonl) · [Ver resultados completos](independent_results.jsonl)
+**🟡 PENDIENTE**
+
+**Probabilidad:** 63.48%  
+**Cuota:** -155 · DraftKings  
+**Ventaja estimada:** 5.18 puntos porcentuales  
+**EV estimado:** 4.44%
+
+**Kelly teórico:** 6.87%  
+**¼ Kelly hipotético (máx. 5%):** 1.72%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### NYJ @ CHI
+
+**🎯 PICK: CHI ML**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 80.2%  
+**Cuota:** -170 · DraftKings  
+**Ventaja estimada:** 19.82 puntos porcentuales  
+**EV estimado:** 27.37%
+
+**Kelly teórico:** 46.54%  
+**¼ Kelly hipotético (máx. 5%):** 5.00%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### ATL @ NO
+
+**🎯 PICK: NO ML**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 63.33%  
+**Cuota:** -155 · DraftKings  
+**Ventaja estimada:** 5.03 puntos porcentuales  
+**EV estimado:** 4.18%
+
+**Kelly teórico:** 6.49%  
+**¼ Kelly hipotético (máx. 5%):** 1.62%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+---
+
+## 📏 SPREAD · Hándicap
+
+### GB @ TB
+
+**🎯 PICK: TB +3.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 58.2%  
+**Cuota:** 100 · DraftKings  
+**Ventaja estimada:** 10.37 puntos porcentuales  
+**EV estimado:** 16.39%
+
+**Kelly teórico:** 16.40%  
+**¼ Kelly hipotético (máx. 5%):** 4.10%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 17:05 UTC</sub>
+
+---
+
+### ARI @ NYG
+
+**🎯 PICK: NYG +1.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 63.35%  
+**Cuota:** -118 · DraftKings  
+**Ventaja estimada:** 11.61 puntos porcentuales  
+**EV estimado:** 17.03%
+
+**Kelly teórico:** 20.10%  
+**¼ Kelly hipotético (máx. 5%):** 5.00%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### JAX @ CIN
+
+**🎯 PICK: JAX +2.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 63.47%  
+**Cuota:** -105 · DraftKings  
+**Ventaja estimada:** 14.55 puntos porcentuales  
+**EV estimado:** 23.91%
+
+**Kelly teórico:** 25.11%  
+**¼ Kelly hipotético (máx. 5%):** 5.00%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### NE @ BUF
+
+**🎯 PICK: NE +7**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 63.0%  
+**Cuota:** -115 · DraftKings  
+**Ventaja estimada:** 11.91 puntos porcentuales  
+**EV estimado:** 17.78%
+
+**Kelly teórico:** 20.45%  
+**¼ Kelly hipotético (máx. 5%):** 5.00%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### NYJ @ CHI
+
+**🎯 PICK: CHI -3.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 67.56%  
+**Cuota:** -102 · DraftKings  
+**Ventaja estimada:** 19.3 puntos porcentuales  
+**EV estimado:** 33.8%
+
+**Kelly teórico:** 34.47%  
+**¼ Kelly hipotético (máx. 5%):** 5.00%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+---
+
+## 🎯 TOTALES · Over/Under
+
+### NE @ BUF
+
+**🎯 PICK: Under 48.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 60.89%  
+**Cuota:** -110 · DraftKings  
+**Ventaja estimada:** 10.89 puntos porcentuales  
+**EV estimado:** 16.24%
+
+**Kelly teórico:** 17.87%  
+**¼ Kelly hipotético (máx. 5%):** 4.47%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 17:05 UTC</sub>
+
+---
+
+### ATL @ NO
+
+**🎯 PICK: Under 48.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 59.02%  
+**Cuota:** -108 · DraftKings  
+**Ventaja estimada:** 9.45 puntos porcentuales  
+**EV estimado:** 13.66%
+
+**Kelly teórico:** 14.76%  
+**¼ Kelly hipotético (máx. 5%):** 3.69%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 17:05 UTC</sub>
+
+---
+
+### DEN @ SF
+
+**🎯 PICK: Under 46.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 64.05%  
+**Cuota:** -108 · DraftKings  
+**Ventaja estimada:** 14.48 puntos porcentuales  
+**EV estimado:** 23.36%
+
+**Kelly teórico:** 25.22%  
+**¼ Kelly hipotético (máx. 5%):** 5.00%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### DET @ CAR
+
+**🎯 PICK: Under 50.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 60.89%  
+**Cuota:** -108 · DraftKings  
+**Ventaja estimada:** 11.32 puntos porcentuales  
+**EV estimado:** 17.27%
+
+**Kelly teórico:** 18.65%  
+**¼ Kelly hipotético (máx. 5%):** 4.66%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### JAX @ CIN
+
+**🎯 PICK: Under 51.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 58.31%  
+**Cuota:** -118 · DraftKings  
+**Ventaja estimada:** 6.58 puntos porcentuales  
+**EV estimado:** 7.73%
+
+**Kelly teórico:** 9.12%  
+**¼ Kelly hipotético (máx. 5%):** 2.28%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-09-29 16:34 UTC</sub>
+
+---
+
+### ℹ️ Información del monitor
+
+Se ejecuta los **domingos a las 8:00 a. m., hora de Hidalgo**. Los resultados finalizados se liquidan en la siguiente ejecución.
+
+El Kelly se calcula con la cuota y la probabilidad originales. No es una apuesta real ni una garantía de rentabilidad. Los datos de QB, PBP y meteorología actual todavía no tienen procedencia prepartido verificada.
