@@ -93,6 +93,11 @@ def grade(p,hs,aws):
         line=float(p["line"]);total=hs+aws
         diff=total-line if pick.startswith("Over") else line-total
     return "PUSH" if abs(diff)<1e-9 else ("WIN" if diff>0 else "LOSS")
+def nflverse_final(g):
+    result = g.get("result")
+    return pd.notna(g.get("home_score")) and pd.notna(g.get("away_score")) and result is not None and pd.notna(result)
+
+
 def settle():
     records=read(ROOT/"recommendations.jsonl")
     done={x["recommendation_id"] for x in read(ROOT/"results.jsonl")}
@@ -102,7 +107,7 @@ def settle():
     schedules=pd.concat([nfl.import_schedules([s]) for s in seasons],ignore_index=True)
     by_game={}
     for _,g in schedules.iterrows():
-        if pd.notna(g.get("home_score")) and pd.notna(g.get("away_score")):
+        if nflverse_final(g):
             key=(int(g.season),int(g.week),str(g.away_team)+" @ "+str(g.home_team))
             by_game[key]=(float(g.home_score),float(g.away_score))
     out=[]
