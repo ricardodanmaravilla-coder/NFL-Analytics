@@ -265,6 +265,12 @@ def _espn_final_scores(season_week_pairs):
     return out
 
 
+def _nflverse_final(row):
+    import pandas as pd
+    result = row.get("result")
+    return pd.notna(row.get("home_score")) and pd.notna(row.get("away_score")) and result is not None and pd.notna(result)
+
+
 def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
     target_sheet_id = (sheet_id or SHEET_ID).strip()
     target_worksheet = (worksheet or WORKSHEET).strip() or "NFL_Picks"
@@ -318,7 +324,7 @@ def settle_pending(sheet_id: str | None = None, worksheet: str | None = None):
                     matches = matches[pd.to_numeric(matches["season"], errors="coerce") == item["season"]]
                 if not matches.empty:
                     gr = matches.iloc[-1]; nhs, naws = gr.get("home_score"), gr.get("away_score")
-                    if not pd.isna(nhs) and not pd.isna(naws): hs, aws, source = float(nhs), float(naws), "nflverse"
+                    if _nflverse_final(gr): hs, aws, source = float(nhs), float(naws), "nflverse"
             if hs is None or aws is None:
                 fallback = fallback_scores.get((item["season"], item["week"], item["home"], item["away"]))
                 if fallback is not None: hs, aws, source = fallback[0], fallback[1], "espn"
