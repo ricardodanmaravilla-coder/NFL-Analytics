@@ -19,6 +19,17 @@ def odds_decimal(x):
     if x is None:return None
     x=float(x)
     return 1+x/100 if x>=100 else (1+100/abs(x) if x<=-100 else None)
+def paper_kelly(p, odd, bankroll=5000.0):
+    """Hypothetical staking only: quarter-Kelly, clamped to 3%-10% for recommended picks."""
+    d=odds_decimal(odd)
+    if d is None:return {"kelly_full_pct":0.0,"kelly_quarter_pct":0.0,"kelly_assigned_pct":0.0,"paper_stake":0.0}
+    b=d-1.0
+    full=max(0.0,(b*p-(1-p))/b)
+    quarter=full/4.0
+    assigned=min(0.10,max(0.03,quarter))
+    return {"kelly_full_pct":round(full*100,2),"kelly_quarter_pct":round(quarter*100,2),
+            "kelly_assigned_pct":round(assigned*100,2),"paper_stake":round(bankroll*assigned,2)}
+
 def offer(side,p,odd,other,line=None):
     d=odds_decimal(odd);e=odds_decimal(other)
     if d is None or e is None:return None
@@ -134,6 +145,10 @@ def independent_scan(season,week):
                 # All model recommendations above threshold are logged, not only
                 # apparent positive ROI; every quoted side is saved as a snapshot.
                 x["recommended"]=x["probability"]>=58 and x["edge_pp"]>=3 and x["ev_pct"]>=3
+                if x["recommended"]:
+                    x.update(paper_kelly(x["probability"]/100.0,x["odds"]))
+                else:
+                    x.update({"kelly_full_pct":0.0,"kelly_quarter_pct":0.0,"kelly_assigned_pct":0.0,"paper_stake":0.0})
                 x["pick"]=(f"{x['side']} ML" if market=="ML" else
                            f"{x['side']} {float(x['line']):+g}" if market=="SPREAD" else
                            f"{x['side']} {float(x['line']):g}")
