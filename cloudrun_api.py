@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse
 from modules.nfl_calibration import market_anchored_probability, empirical_residual_two_way, historico_antes, primary_with_agreement
 from modules.nfl_elo_engine import MotorELONFL
 from modules.nfl_google_sheets import settle_pending, sync_bets
+from modules.nfl_independent_sheet_settlement import settle_independent_pending
 from modules.nfl_moneyline_runtime import MoneylineRuntime
 from modules.nfl_production_history import load_production_history
 from modules.nfl_montecarlo_sim import simular_nfl_montecarlo
@@ -209,6 +210,11 @@ def health():
 @app.get("/api/settle")
 def settle():
     return settle_pending()
+
+
+@app.get("/api/settle-independent")
+def settle_independent():
+    return settle_independent_pending()
 
 
 @app.get("/api/scan/{season}/{week}")
