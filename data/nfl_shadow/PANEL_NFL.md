@@ -4,29 +4,29 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 04/10/2026 17:57 UTC
+**Última actualización:** 05/10/2026 15:20 UTC
 
 ## 📊 Resumen
 
 **🏆 MONEYLINE · Ganador**
 
-**4 picks** · 🟡 4 pendientes · 🟢 0 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
+**4 picks** · 🟡 1 pendientes · 🟢 3 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** Sin resultados todavía
+**ROI simulado:** +72.9%
 
 **📏 SPREAD · Hándicap**
 
-**5 picks** · 🟡 5 pendientes · 🟢 0 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
+**5 picks** · 🟡 0 pendientes · 🟢 5 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** Sin resultados todavía
+**ROI simulado:** +93.0%
 
 **🎯 TOTALES · Over/Under**
 
-**5 picks** · 🟡 5 pendientes · 🟢 0 ganadas · 🔴 0 perdidas · ⚪ 0 anuladas
+**5 picks** · 🟡 1 pendientes · 🟢 2 ganadas · 🔴 2 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** Sin resultados todavía
+**ROI simulado:** -5.7%
 
-**Último escaneo:** 2026-10-04 17:57 UTC
+**Último escaneo:** 2026-10-05 15:20 UTC
 
 ---
 
@@ -36,7 +36,7 @@
 
 **🎯 PICK: NYG ML**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 62.82%  
 **Cuota:** -105 · DraftKings  
@@ -46,7 +46,7 @@
 **Kelly teórico:** 23.78%  
 **¼ Kelly hipotético (máx. 5%):** 5.00%
 
-**Marcador:** Por jugar
+**Marcador:** 24–36 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -56,7 +56,7 @@
 
 **🎯 PICK: SF ML**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 63.48%  
 **Cuota:** -155 · DraftKings  
@@ -66,7 +66,7 @@
 **Kelly teórico:** 6.87%  
 **¼ Kelly hipotético (máx. 5%):** 1.72%
 
-**Marcador:** Por jugar
+**Marcador:** 14–24 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -76,7 +76,7 @@
 
 **🎯 PICK: CHI ML**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 80.2%  
 **Cuota:** -170 · DraftKings  
@@ -86,7 +86,7 @@
 **Kelly teórico:** 46.54%  
 **¼ Kelly hipotético (máx. 5%):** 5.00%
 
-**Marcador:** Por jugar
+**Marcador:** 12–23 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -120,7 +120,7 @@
 
 **🎯 PICK: TB +3.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 58.2%  
 **Cuota:** 100 · DraftKings  
@@ -130,7 +130,7 @@
 **Kelly teórico:** 16.40%  
 **¼ Kelly hipotético (máx. 5%):** 4.10%
 
-**Marcador:** Por jugar
+**Marcador:** 17–14 (visita–local)
 
 <sub>Capturado: 2026-09-29 17:05 UTC</sub>
 
@@ -140,7 +140,7 @@
 
 **🎯 PICK: NYG +1.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 63.35%  
 **Cuota:** -118 · DraftKings  
@@ -150,7 +150,7 @@
 **Kelly teórico:** 20.10%  
 **¼ Kelly hipotético (máx. 5%):** 5.00%
 
-**Marcador:** Por jugar
+**Marcador:** 24–36 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -160,7 +160,7 @@
 
 **🎯 PICK: JAX +2.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 63.47%  
 **Cuota:** -105 · DraftKings  
@@ -170,7 +170,7 @@
 **Kelly teórico:** 25.11%  
 **¼ Kelly hipotético (máx. 5%):** 5.00%
 
-**Marcador:** Por jugar
+**Marcador:** 22–17 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -180,7 +180,7 @@
 
 **🎯 PICK: NE +7**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 63.0%  
 **Cuota:** -115 · DraftKings  
@@ -190,7 +190,7 @@
 **Kelly teórico:** 20.45%  
 **¼ Kelly hipotético (máx. 5%):** 5.00%
 
-**Marcador:** Por jugar
+**Marcador:** 29–26 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -200,7 +200,7 @@
 
 **🎯 PICK: CHI -3.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 67.56%  
 **Cuota:** -102 · DraftKings  
@@ -210,7 +210,7 @@
 **Kelly teórico:** 34.47%  
 **¼ Kelly hipotético (máx. 5%):** 5.00%
 
-**Marcador:** Por jugar
+**Marcador:** 12–23 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -224,7 +224,7 @@
 
 **🎯 PICK: Under 48.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 60.89%  
 **Cuota:** -110 · DraftKings  
@@ -234,7 +234,7 @@
 **Kelly teórico:** 17.87%  
 **¼ Kelly hipotético (máx. 5%):** 4.47%
 
-**Marcador:** Por jugar
+**Marcador:** 29–26 (visita–local)
 
 <sub>Capturado: 2026-09-29 17:05 UTC</sub>
 
@@ -264,7 +264,7 @@
 
 **🎯 PICK: Under 46.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 64.05%  
 **Cuota:** -108 · DraftKings  
@@ -274,7 +274,7 @@
 **Kelly teórico:** 25.22%  
 **¼ Kelly hipotético (máx. 5%):** 5.00%
 
-**Marcador:** Por jugar
+**Marcador:** 14–24 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -284,7 +284,7 @@
 
 **🎯 PICK: Under 50.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 60.89%  
 **Cuota:** -108 · DraftKings  
@@ -294,7 +294,7 @@
 **Kelly teórico:** 18.65%  
 **¼ Kelly hipotético (máx. 5%):** 4.66%
 
-**Marcador:** Por jugar
+**Marcador:** 26–32 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
@@ -304,7 +304,7 @@
 
 **🎯 PICK: Under 51.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 58.31%  
 **Cuota:** -118 · DraftKings  
@@ -314,7 +314,7 @@
 **Kelly teórico:** 9.12%  
 **¼ Kelly hipotético (máx. 5%):** 2.28%
 
-**Marcador:** Por jugar
+**Marcador:** 22–17 (visita–local)
 
 <sub>Capturado: 2026-09-29 16:34 UTC</sub>
 
