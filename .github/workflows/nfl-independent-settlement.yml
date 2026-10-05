@@ -1,6 +1,6 @@
 name: NFL Independent Settlement
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   push:
     paths:
       - '.github/workflows/nfl-independent-settlement.yml'
