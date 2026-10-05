@@ -1,6 +1,9 @@
 name: NFL Independent Settlement
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nfl-independent-settlement.yml'
   schedule:
     # Sunday 22:00 Mexico City = Monday 04:00 UTC
     - cron: '0 4 * * 1'
