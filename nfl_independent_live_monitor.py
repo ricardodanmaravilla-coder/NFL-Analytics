@@ -168,7 +168,7 @@ def settle():
     games=pd.concat([nfl.import_schedules([s]) for s in seasons],ignore_index=True)
     results={}
     for _,g in games.iterrows():
-        if pd.notna(g.get("home_score")) and pd.notna(g.get("away_score")):
+        if pd.notna(g.get("home_score")) and pd.notna(g.get("away_score")) and pd.notna(g.get("result")):
             results[(int(g.season),int(g.week),f"{g.away_team} @ {g.home_team}")]=(float(g.home_score),float(g.away_score))
     done=[]
     for r in pending:
