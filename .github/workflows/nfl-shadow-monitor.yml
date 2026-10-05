@@ -14,9 +14,8 @@ on:
         description: 'Optional NFL week'
         required: false
   schedule:
-    # Sunday 22:00 and Monday 22:00 America/Mexico_City (UTC-6)
-    - cron: '0 4 * * 1'
-    - cron: '0 4 * * 2'
+    # Sunday 08:00 America/Mexico_City (UTC-6)
+    - cron: '0 14 * * 0'
 permissions:
   contents: write
 concurrency:
