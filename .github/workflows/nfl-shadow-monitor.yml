@@ -14,8 +14,9 @@ on:
         description: 'Optional NFL week'
         required: false
   schedule:
-    # Sunday 08:00 America/Mexico_City (UTC-6, no DST)
-    - cron: '0 14 * * 0'
+    # Sunday 22:00 and Monday 22:00 America/Mexico_City (UTC-6)
+    - cron: '0 4 * * 1'
+    - cron: '0 4 * * 2'
 permissions:
   contents: write
 concurrency:
@@ -65,8 +66,6 @@ jobs:
           git commit -m "data(nfl): append shadow observations and settled results"
           git fetch origin main
           if ! git rebase origin/main; then
-            # The dashboard is fully derived; prefer the latest generated copy
-            # when another run or a manual update published the same file.
             if git ls-files -u | grep -q 'data/nfl_shadow/PANEL_NFL.md'; then
               git checkout --theirs -- data/nfl_shadow/PANEL_NFL.md
               git add data/nfl_shadow/PANEL_NFL.md
