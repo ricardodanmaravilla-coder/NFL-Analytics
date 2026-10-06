@@ -7,7 +7,7 @@ on:
     - cron: "0 4 * * 2"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nfl-independent-settlement
@@ -16,18 +16,31 @@ concurrency:
 jobs:
   settle:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Settle independent Sheet via Cloud Run
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Settle independent result ledger
+        run: python -c "import nfl_independent_live_monitor as m; print({'settled':m.settle()})"
+      - name: Build dashboard
+        run: python nfl_shadow_dashboard.py
+      - name: Save independent settlement
         shell: bash
         run: |
           set -euo pipefail
-          ENDPOINT="https://nfl-analytics-664101772310.northamerica-south1.run.app/api/settle-independent"
-          response="$(curl --fail-with-body --silent --show-error --retry 3 --retry-delay 10 --retry-all-errors --max-time 120 "$ENDPOINT")"
-          echo "$response"
-          python - "$response" <<'PY'
-          import json,sys
-          data=json.loads(sys.argv[1])
-          if data.get("ok") is not True:
-              raise SystemExit(f"Independent settlement failed: {data}")
-          print(f"Independent settlement OK | settled={data.get('settled',0)} | pending={data.get('pending',0)}")
-          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/nfl_shadow/
+          if git diff --cached --quiet; then
+            echo "No new independent results"
+            exit 0
+          fi
+          git commit -m "data(nfl): settle independent picks"
+          git pull --rebase origin main
+          git push origin main
