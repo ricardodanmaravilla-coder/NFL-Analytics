@@ -12,3 +12,10 @@
 {"away_score": 29.0, "home_score": 26.0, "paper_return_per_unit": -1, "recommendation_id": "2026|4|independent_total_baseline_v1|NE @ BUF|Under", "result": "LOSS", "settled_at": "2026-10-05T15:20:07.512770+00:00"}
 {"away_score": 45.0, "home_score": 24.0, "paper_return_per_unit": -1, "recommendation_id": "2026|4|independent_ml_full_v1|ATL @ NO|NO", "result": "LOSS", "settled_at": "2026-10-11T14:26:26.112437+00:00"}
 {"away_score": 45.0, "home_score": 24.0, "paper_return_per_unit": -1, "recommendation_id": "2026|4|independent_total_baseline_v1|ATL @ NO|Under", "result": "LOSS", "settled_at": "2026-10-11T14:26:26.112463+00:00"}
+{"away_score": 7.0, "home_score": 31.0, "paper_return_per_unit": -1, "recommendation_id": "2026|5|independent_ml_full_v1|CHI @ GB|CHI", "result": "LOSS", "settled_at": "2026-10-12T11:35:37.110705+00:00"}
+{"away_score": 7.0, "home_score": 31.0, "paper_return_per_unit": -1, "recommendation_id": "2026|5|independent_spread_baseline_v1|CHI @ GB|CHI", "result": "LOSS", "settled_at": "2026-10-12T11:35:37.110730+00:00"}
+{"away_score": 7.0, "home_score": 31.0, "paper_return_per_unit": 0.847458, "recommendation_id": "2026|5|independent_total_baseline_v1|CHI @ GB|Under", "result": "WIN", "settled_at": "2026-10-12T11:35:37.110739+00:00"}
+{"away_score": 12.0, "home_score": 17.0, "paper_return_per_unit": -1, "recommendation_id": "2026|5|independent_spread_baseline_v1|CLE @ NYJ|CLE", "result": "LOSS", "settled_at": "2026-10-12T11:35:37.110749+00:00"}
+{"away_score": 45.0, "home_score": 21.0, "paper_return_per_unit": -1, "recommendation_id": "2026|5|independent_total_baseline_v1|DET @ ARI|Under", "result": "LOSS", "settled_at": "2026-10-12T11:35:37.110756+00:00"}
+{"away_score": 22.0, "home_score": 34.0, "paper_return_per_unit": -1, "recommendation_id": "2026|5|independent_spread_baseline_v1|IND @ PIT|IND", "result": "LOSS", "settled_at": "2026-10-12T11:35:37.110761+00:00"}
+{"away_score": 27.0, "home_score": 27.0, "paper_return_per_unit": 0.952381, "recommendation_id": "2026|5|independent_spread_baseline_v1|NYG @ WAS|NYG", "result": "WIN", "settled_at": "2026-10-12T11:35:37.110767+00:00"}
