@@ -23,7 +23,7 @@ def kelly(probability, american_odds):
         return 0.0, 0.0
     b = odd / 100 if odd > 0 else 100 / abs(odd)
     full = max(0.0, (b * p - (1 - p)) / b)
-    return round(full * 100, 2), round(min(full / 4, 0.05) * 100, 2)
+    return round(full * 100, 2), round(min(full / 4, 0.10) * 100, 2)
 
 def render(picks=None, settled=None, snapshots=None):
     picks = read("independent_recommendations.jsonl") if picks is None else picks
@@ -86,7 +86,7 @@ def render(picks=None, settled=None, snapshots=None):
                 f"**EV estimado:** {x.get('ev_pct', '—')}%",
                 "",
                 f"**Kelly teórico:** {full:.2f}%  ",
-                f"**¼ Kelly hipotético (máx. 5%):** {quarter:.2f}%",
+                f"**¼ Kelly hipotético (máx. 10%, sin mínimo):** {quarter:.2f}%",
                 "",
                 "**Marcador:** " + (f"{result['away_score']:g}–{result['home_score']:g} (visita–local)" if result else "Por jugar"),
                 "",
