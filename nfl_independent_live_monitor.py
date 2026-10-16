@@ -20,13 +20,13 @@ def odds_decimal(x):
     x=float(x)
     return 1+x/100 if x>=100 else (1+100/abs(x) if x<=-100 else None)
 def paper_kelly(p, odd, bankroll=5000.0):
-    """Hypothetical staking only: quarter-Kelly, clamped to 3%-10% for recommended picks."""
+    """Hypothetical staking only: quarter-Kelly capped at 10%; no forced minimum."""
     d=odds_decimal(odd)
     if d is None:return {"kelly_full_pct":0.0,"kelly_quarter_pct":0.0,"kelly_assigned_pct":0.0,"paper_stake":0.0}
     b=d-1.0
     full=max(0.0,(b*p-(1-p))/b)
     quarter=full/4.0
-    assigned=min(0.10,max(0.03,quarter))
+    assigned=min(0.10,quarter)  # Never inflate a smaller Kelly estimate to a 3% minimum
     return {"kelly_full_pct":round(full*100,2),"kelly_quarter_pct":round(quarter*100,2),
             "kelly_assigned_pct":round(assigned*100,2),"paper_stake":round(bankroll*assigned,2)}
 
