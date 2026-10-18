@@ -74,3 +74,5 @@ jobs:
             fi
           fi
           git push origin main
+
+# Manual independent scanner invocation requested 2026-10-18; no schedule or model changes.
