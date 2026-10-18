@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 16/10/2026 21:56 UTC
+**Última actualización:** 18/10/2026 14:39 UTC
 
 ## 📊 Resumen
 
@@ -26,7 +26,7 @@
 
 **ROI simulado:** -19.7%
 
-**Último escaneo:** 2026-10-16 21:56 UTC
+**Último escaneo:** 2026-10-18 14:39 UTC
 
 ---
 
@@ -44,7 +44,7 @@
 **EV estimado:** 5.06%
 
 **Kelly teórico:** 8.39%  
-**¼ Kelly hipotético (máx. 5%):** 2.10%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.10%
 
 **Marcador:** Por jugar
 
@@ -64,7 +64,7 @@
 **EV estimado:** 7.37%
 
 **Kelly teórico:** 8.70%  
-**¼ Kelly hipotético (máx. 5%):** 2.18%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.18%
 
 **Marcador:** Por jugar
 
@@ -84,7 +84,7 @@
 **EV estimado:** 36.04%
 
 **Kelly teórico:** 39.65%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 9.91%
 
 **Marcador:** Por jugar
 
@@ -104,7 +104,7 @@
 **EV estimado:** 3.14%
 
 **Kelly teórico:** 10.82%  
-**¼ Kelly hipotético (máx. 5%):** 2.71%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.71%
 
 **Marcador:** Por jugar
 
@@ -124,7 +124,7 @@
 **EV estimado:** 15.76%
 
 **Kelly teórico:** 19.70%  
-**¼ Kelly hipotético (máx. 5%):** 4.92%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.92%
 
 **Marcador:** 7–31 (visita–local)
 
@@ -144,7 +144,7 @@
 **EV estimado:** 22.65%
 
 **Kelly teórico:** 23.78%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.95%
 
 **Marcador:** 24–36 (visita–local)
 
@@ -164,7 +164,7 @@
 **EV estimado:** 4.44%
 
 **Kelly teórico:** 6.87%  
-**¼ Kelly hipotético (máx. 5%):** 1.72%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 1.72%
 
 **Marcador:** 14–24 (visita–local)
 
@@ -184,7 +184,7 @@
 **EV estimado:** 27.37%
 
 **Kelly teórico:** 46.54%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 10.00%
 
 **Marcador:** 12–23 (visita–local)
 
@@ -204,7 +204,7 @@
 **EV estimado:** 4.18%
 
 **Kelly teórico:** 6.49%  
-**¼ Kelly hipotético (máx. 5%):** 1.62%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 1.62%
 
 **Marcador:** 45–24 (visita–local)
 
@@ -228,7 +228,7 @@
 **EV estimado:** 13.44%
 
 **Kelly teórico:** 14.51%  
-**¼ Kelly hipotético (máx. 5%):** 3.63%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.63%
 
 **Marcador:** Por jugar
 
@@ -248,7 +248,7 @@
 **EV estimado:** 14.22%
 
 **Kelly teórico:** 16.79%  
-**¼ Kelly hipotético (máx. 5%):** 4.20%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.20%
 
 **Marcador:** Por jugar
 
@@ -268,7 +268,7 @@
 **EV estimado:** 13.78%
 
 **Kelly teórico:** 16.82%  
-**¼ Kelly hipotético (máx. 5%):** 4.20%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.20%
 
 **Marcador:** Por jugar
 
@@ -288,7 +288,7 @@
 **EV estimado:** 14.31%
 
 **Kelly teórico:** 15.03%  
-**¼ Kelly hipotético (máx. 5%):** 3.76%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.76%
 
 **Marcador:** Por jugar
 
@@ -308,7 +308,7 @@
 **EV estimado:** 27.42%
 
 **Kelly teórico:** 29.61%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 7.40%
 
 **Marcador:** Por jugar
 
@@ -328,7 +328,7 @@
 **EV estimado:** 16.81%
 
 **Kelly teórico:** 18.83%  
-**¼ Kelly hipotético (máx. 5%):** 4.71%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.71%
 
 **Marcador:** 7–31 (visita–local)
 
@@ -348,7 +348,7 @@
 **EV estimado:** 13.79%
 
 **Kelly teórico:** 15.16%  
-**¼ Kelly hipotético (máx. 5%):** 3.79%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.79%
 
 **Marcador:** 12–17 (visita–local)
 
@@ -368,7 +368,7 @@
 **EV estimado:** 10.38%
 
 **Kelly teórico:** 11.62%  
-**¼ Kelly hipotético (máx. 5%):** 2.90%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.90%
 
 **Marcador:** 22–34 (visita–local)
 
@@ -388,7 +388,7 @@
 **EV estimado:** 22.54%
 
 **Kelly teórico:** 23.66%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.91%
 
 **Marcador:** 27–27 (visita–local)
 
@@ -408,7 +408,7 @@
 **EV estimado:** 33.72%
 
 **Kelly teórico:** 33.72%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 8.43%
 
 **Marcador:** 37–34 (visita–local)
 
@@ -428,7 +428,7 @@
 **EV estimado:** 16.39%
 
 **Kelly teórico:** 16.40%  
-**¼ Kelly hipotético (máx. 5%):** 4.10%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.10%
 
 **Marcador:** 17–14 (visita–local)
 
@@ -448,7 +448,7 @@
 **EV estimado:** 17.03%
 
 **Kelly teórico:** 20.10%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.03%
 
 **Marcador:** 24–36 (visita–local)
 
@@ -468,7 +468,7 @@
 **EV estimado:** 23.91%
 
 **Kelly teórico:** 25.11%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 6.28%
 
 **Marcador:** 22–17 (visita–local)
 
@@ -488,7 +488,7 @@
 **EV estimado:** 17.78%
 
 **Kelly teórico:** 20.45%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.11%
 
 **Marcador:** 29–26 (visita–local)
 
@@ -508,7 +508,7 @@
 **EV estimado:** 33.8%
 
 **Kelly teórico:** 34.47%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 8.62%
 
 **Marcador:** 12–23 (visita–local)
 
@@ -532,7 +532,7 @@
 **EV estimado:** 18.62%
 
 **Kelly teórico:** 20.11%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.03%
 
 **Marcador:** Por jugar
 
@@ -552,7 +552,7 @@
 **EV estimado:** 16.25%
 
 **Kelly teórico:** 18.69%  
-**¼ Kelly hipotético (máx. 5%):** 4.67%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.67%
 
 **Marcador:** Por jugar
 
@@ -572,7 +572,7 @@
 **EV estimado:** 13.4%
 
 **Kelly teórico:** 15.42%  
-**¼ Kelly hipotético (máx. 5%):** 3.85%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.85%
 
 **Marcador:** Por jugar
 
@@ -592,7 +592,7 @@
 **EV estimado:** 12.28%
 
 **Kelly teórico:** 14.48%  
-**¼ Kelly hipotético (máx. 5%):** 3.62%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.62%
 
 **Marcador:** 7–31 (visita–local)
 
@@ -612,7 +612,7 @@
 **EV estimado:** 22.9%
 
 **Kelly teórico:** 23.36%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.84%
 
 **Marcador:** 45–21 (visita–local)
 
@@ -632,7 +632,7 @@
 **EV estimado:** 16.24%
 
 **Kelly teórico:** 17.87%  
-**¼ Kelly hipotético (máx. 5%):** 4.47%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.47%
 
 **Marcador:** 29–26 (visita–local)
 
@@ -652,7 +652,7 @@
 **EV estimado:** 13.66%
 
 **Kelly teórico:** 14.76%  
-**¼ Kelly hipotético (máx. 5%):** 3.69%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.69%
 
 **Marcador:** 45–24 (visita–local)
 
@@ -672,7 +672,7 @@
 **EV estimado:** 23.36%
 
 **Kelly teórico:** 25.22%  
-**¼ Kelly hipotético (máx. 5%):** 5.00%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 6.31%
 
 **Marcador:** 14–24 (visita–local)
 
@@ -692,7 +692,7 @@
 **EV estimado:** 17.27%
 
 **Kelly teórico:** 18.65%  
-**¼ Kelly hipotético (máx. 5%):** 4.66%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.66%
 
 **Marcador:** 26–32 (visita–local)
 
@@ -712,7 +712,7 @@
 **EV estimado:** 7.73%
 
 **Kelly teórico:** 9.12%  
-**¼ Kelly hipotético (máx. 5%):** 2.28%
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.28%
 
 **Marcador:** 22–17 (visita–local)
 
