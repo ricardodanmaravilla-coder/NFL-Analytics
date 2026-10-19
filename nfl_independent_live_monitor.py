@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import nfl_data_py as nfl
 import requests
+from sklearn.linear_model import LogisticRegression
 from modules.nfl_experimental_features import build_expanded_pregame
 from modules.nfl_independent_markets import IndependentMarketEngine,feature_groups
 from nfl_shadow_monitor import ROOT,BASE,save_jsonl,read,utc,grade
@@ -85,6 +86,29 @@ def residuals_for(market,features,training):
     arr=arr[np.isfinite(arr)]
     if len(arr)<100:raise RuntimeError(f"{market}: insufficient prior OOS residuals")
     return arr
+def calibrate_ml_oos(features,training,predictions):
+    """Fit a Platt calibrator on strictly earlier expanding-year out-of-sample ML predictions.
+
+    The current target week and season never enter calibration. If the historical
+    sample is inadequate, return conservative prior/base-rate shrinkage rather
+    than claiming raw random-forest probabilities are calibrated.
+    """
+    xs=[];ys=[]
+    for year in (2022,2023,2024,2025):
+        prior=training[(training.season>=2021)&(training.season<year)]
+        validation=training[training.season==year]
+        if len(prior)<100 or len(validation)<100:continue
+        engine=IndependentMarketEngine("ML",features).fit(prior)
+        xs.extend(engine.predict(validation).tolist())
+        ys.extend(engine.target(validation).astype(int).tolist())
+    raw=np.asarray(predictions,dtype=float)
+    if len(xs)<150 or len(set(ys))<2:
+        raise RuntimeError("ML OOS calibration unavailable; raw probabilities must not be recommended")
+    cal=LogisticRegression(C=1.0,random_state=42)
+    cal.fit(np.asarray(xs).reshape(-1,1),np.asarray(ys))
+    result=cal.predict_proba(raw.reshape(-1,1))[:,1]
+    return np.clip(result,0.01,0.99),len(xs)
+
 def independent_scan(season,week):
     training,test,upcoming=history_and_future(season,week)
     if test is None:return {"season":season,"week":week,"recommendations":[],"diagnostics":["NO_FUTURE_GAMES"]}
@@ -101,7 +125,9 @@ def independent_scan(season,week):
         engine.fit(training[training.season>=2021])
         preds=engine.predict(test)
         errors=residuals_for(market,cols,training) if market!="ML" else None
-        predictions[market]=(preds,errors,len(cols))
+        calibration_count=0
+        if market=="ML":preds,calibration_count=calibrate_ml_oos(cols,training,preds)
+        predictions[market]=(preds,errors,len(cols),calibration_count)
     stamp=utc();out=[];diagnostics=[]
     for i,g in test.reset_index(drop=True).iterrows():
         game=f"{g.away_team} @ {g.home_team}"
@@ -110,7 +136,7 @@ def independent_scan(season,week):
             diagnostics.append({"game":game,"status":"NO_REAL_ODDS"});continue
         available=0
         for market in VARIANTS:
-            preds,errors,nfeatures=predictions[market]
+            preds,errors,nfeatures,calibration_count=predictions[market]
             pred=float(preds[i]);offers=[]
             if market=="ML":
                 ph=float(np.clip(pred,0,1))
@@ -138,7 +164,7 @@ def independent_scan(season,week):
                 x.update({"game":game,"game_id":g.game_id,"season":season,"week":week,
                           "market":market,"model":f"independent_{market.lower()}_{VARIANTS[market].lower()}_v1",
                           "feature_count":nfeatures,"prediction":round(pred,3),
-                          "calibration":"RAW" if market=="ML" else f"OOS_RESIDUAL_X{TEMPERATURE[market]:g}",
+                          "calibration":f"PLATT_OOS_N{calibration_count}" if market=="ML" else f"OOS_RESIDUAL_X{TEMPERATURE[market]:g}",
                           "book":quote.get({"ML":"book","SPREAD":"spread_book","TOTAL":"total_book"}[market]),
                           "odds_source":quote.get("odds_source"),"odds_fetched_at":quote.get("odds_fetched_at"),
                           "captured_at":stamp,"mode":"PAPER_ONLY","stake":0})
