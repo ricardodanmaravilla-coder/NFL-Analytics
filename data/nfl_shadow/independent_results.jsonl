@@ -20,3 +20,12 @@
 {"away_score": 22.0, "home_score": 34.0, "paper_return_per_unit": -1, "recommendation_id": "2026|5|independent_spread_baseline_v1|IND @ PIT|IND", "result": "LOSS", "settled_at": "2026-10-12T11:35:37.110761+00:00"}
 {"away_score": 27.0, "home_score": 27.0, "paper_return_per_unit": 0.952381, "recommendation_id": "2026|5|independent_spread_baseline_v1|NYG @ WAS|NYG", "result": "WIN", "settled_at": "2026-10-12T11:35:37.110767+00:00"}
 {"away_score": 37.0, "home_score": 34.0, "paper_return_per_unit": 1.0, "recommendation_id": "2026|5|independent_spread_baseline_v1|BUF @ LA|BUF", "result": "WIN", "settled_at": "2026-10-13T11:35:40.985115+00:00"}
+{"away_score": 18.0, "home_score": 16.0, "paper_return_per_unit": 0.925926, "recommendation_id": "2026|6|independent_spread_baseline_v1|ARI @ LA|ARI", "result": "WIN", "settled_at": "2026-10-19T01:49:43.384454+00:00"}
+{"away_score": 10.0, "home_score": 13.0, "paper_return_per_unit": -1, "recommendation_id": "2026|6|independent_ml_full_v1|BAL @ CLE|BAL", "result": "LOSS", "settled_at": "2026-10-19T01:49:43.384487+00:00"}
+{"away_score": 25.0, "home_score": 14.0, "paper_return_per_unit": -1, "recommendation_id": "2026|6|independent_spread_baseline_v1|CAR @ PHI|PHI", "result": "LOSS", "settled_at": "2026-10-19T01:49:43.384496+00:00"}
+{"away_score": 31.0, "home_score": 23.0, "paper_return_per_unit": 0.847458, "recommendation_id": "2026|6|independent_ml_full_v1|CHI @ ATL|CHI", "result": "WIN", "settled_at": "2026-10-19T01:49:43.384501+00:00"}
+{"away_score": 31.0, "home_score": 23.0, "paper_return_per_unit": -1, "recommendation_id": "2026|6|independent_total_baseline_v1|CHI @ ATL|Under", "result": "LOSS", "settled_at": "2026-10-19T01:49:43.384507+00:00"}
+{"away_score": 34.0, "home_score": 27.0, "paper_return_per_unit": -1, "recommendation_id": "2026|6|independent_ml_full_v1|NO @ NYG|NYG", "result": "LOSS", "settled_at": "2026-10-19T01:49:43.384512+00:00"}
+{"away_score": 34.0, "home_score": 27.0, "paper_return_per_unit": -1, "recommendation_id": "2026|6|independent_spread_baseline_v1|NO @ NYG|NYG", "result": "LOSS", "settled_at": "2026-10-19T01:49:43.384517+00:00"}
+{"away_score": 19.0, "home_score": 26.0, "paper_return_per_unit": 0.289855, "recommendation_id": "2026|6|independent_ml_full_v1|NYJ @ NE|NE", "result": "WIN", "settled_at": "2026-10-19T01:49:43.384526+00:00"}
+{"away_score": 19.0, "home_score": 26.0, "paper_return_per_unit": -1, "recommendation_id": "2026|6|independent_spread_baseline_v1|NYJ @ NE|NE", "result": "LOSS", "settled_at": "2026-10-19T01:49:43.384533+00:00"}

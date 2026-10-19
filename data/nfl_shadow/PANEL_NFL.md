@@ -4,29 +4,29 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 18/10/2026 17:02 UTC
+**Última actualización:** 19/10/2026 01:50 UTC
 
 ## 📊 Resumen
 
 **🏆 MONEYLINE · Ganador**
 
-**9 picks** · 🟡 4 pendientes · 🟢 3 ganadas · 🔴 2 perdidas · ⚪ 0 anuladas
+**9 picks** · 🟡 0 pendientes · 🟢 5 ganadas · 🔴 4 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +3.7%
+**ROI simulado:** -7.5%
 
 **📏 SPREAD · Hándicap**
 
-**15 picks** · 🟡 5 pendientes · 🟢 7 ganadas · 🔴 3 perdidas · ⚪ 0 anuladas
+**15 picks** · 🟡 1 pendientes · 🟢 8 ganadas · 🔴 6 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +36.0%
+**ROI simulado:** +10.9%
 
 **🎯 TOTALES · Over/Under**
 
-**10 picks** · 🟡 3 pendientes · 🟢 3 ganadas · 🔴 4 perdidas · ⚪ 0 anuladas
+**10 picks** · 🟡 2 pendientes · 🟢 3 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** -19.7%
+**ROI simulado:** -29.7%
 
-**Último escaneo:** 2026-10-18 17:02 UTC
+**Último escaneo:** 2026-10-19 01:50 UTC
 
 ---
 
@@ -36,7 +36,7 @@
 
 **🎯 PICK: BAL ML**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 65.56%  
 **Cuota:** -166 · DraftKings  
@@ -46,7 +46,7 @@
 **Kelly teórico:** 8.39%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.10%
 
-**Marcador:** Por jugar
+**Marcador:** 10–13 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -56,7 +56,7 @@
 
 **🎯 PICK: CHI ML**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 58.12%  
 **Cuota:** -118 · DraftKings  
@@ -66,7 +66,7 @@
 **Kelly teórico:** 8.70%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.18%
 
-**Marcador:** Por jugar
+**Marcador:** 31–23 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -76,7 +76,7 @@
 
 **🎯 PICK: NYG ML**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 71.26%  
 **Cuota:** -110 · DraftKings  
@@ -86,7 +86,7 @@
 **Kelly teórico:** 39.65%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 9.91%
 
-**Marcador:** Por jugar
+**Marcador:** 34–27 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -96,7 +96,7 @@
 
 **🎯 PICK: NE ML**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 79.96%  
 **Cuota:** -345 · DraftKings  
@@ -106,7 +106,7 @@
 **Kelly teórico:** 10.82%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.71%
 
-**Marcador:** Por jugar
+**Marcador:** 19–26 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -220,7 +220,7 @@
 
 **🎯 PICK: ARI +12.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 58.9%  
 **Cuota:** -108 · DraftKings  
@@ -230,7 +230,7 @@
 **Kelly teórico:** 14.51%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.63%
 
-**Marcador:** Por jugar
+**Marcador:** 18–16 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -240,7 +240,7 @@
 
 **🎯 PICK: PHI +3.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 61.83%  
 **Cuota:** -118 · DraftKings  
@@ -250,7 +250,7 @@
 **Kelly teórico:** 16.79%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.20%
 
-**Marcador:** Por jugar
+**Marcador:** 25–14 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -260,7 +260,7 @@
 
 **🎯 PICK: NYG +1.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 62.53%  
 **Cuota:** -122 · DraftKings  
@@ -270,7 +270,7 @@
 **Kelly teórico:** 16.82%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.20%
 
-**Marcador:** Por jugar
+**Marcador:** 34–27 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -280,7 +280,7 @@
 
 **🎯 PICK: NE -7.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 58.55%  
 **Cuota:** -105 · DraftKings  
@@ -290,7 +290,7 @@
 **Kelly teórico:** 15.03%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.76%
 
-**Marcador:** Por jugar
+**Marcador:** 19–26 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
@@ -524,7 +524,7 @@
 
 **🎯 PICK: Under 51.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 61.59%  
 **Cuota:** -108 · DraftKings  
@@ -534,7 +534,7 @@
 **Kelly teórico:** 20.11%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.03%
 
-**Marcador:** Por jugar
+**Marcador:** 31–23 (visita–local)
 
 <sub>Capturado: 2026-10-16 21:56 UTC</sub>
 
