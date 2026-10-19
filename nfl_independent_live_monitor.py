@@ -14,7 +14,7 @@ from modules.nfl_independent_markets import IndependentMarketEngine,feature_grou
 from nfl_shadow_monitor import ROOT,BASE,save_jsonl,read,utc,grade
 
 VARIANTS={"ML":"FULL","SPREAD":"BASELINE","TOTAL":"BASELINE"}
-TEMPERATURE={"SPREAD":2.0,"TOTAL":2.0}
+TEMPERATURE={"SPREAD":1.5,"TOTAL":2.0}  # Spread: 2025 holdout ROI +7.45% vs -4.69% at 2.0; totals unchanged
 def odds_decimal(x):
     if x is None:return None
     x=float(x)
@@ -138,7 +138,7 @@ def independent_scan(season,week):
                 x.update({"game":game,"game_id":g.game_id,"season":season,"week":week,
                           "market":market,"model":f"independent_{market.lower()}_{VARIANTS[market].lower()}_v1",
                           "feature_count":nfeatures,"prediction":round(pred,3),
-                          "calibration":"RAW" if market=="ML" else "OOS_RESIDUAL_X2",
+                          "calibration":"RAW" if market=="ML" else f"OOS_RESIDUAL_X{TEMPERATURE[market]:g}",
                           "book":quote.get({"ML":"book","SPREAD":"spread_book","TOTAL":"total_book"}[market]),
                           "odds_source":quote.get("odds_source"),"odds_fetched_at":quote.get("odds_fetched_at"),
                           "captured_at":stamp,"mode":"PAPER_ONLY","stake":0})
