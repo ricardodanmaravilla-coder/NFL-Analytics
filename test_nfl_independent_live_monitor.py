@@ -1,6 +1,8 @@
 """Safety and probability tests for the three independent paper motors."""
 import unittest
-from nfl_independent_live_monitor import offer,odds_decimal,persist
+import numpy as np
+import pandas as pd
+from nfl_independent_live_monitor import offer,odds_decimal,persist,calibrate_ml_oos
 from unittest.mock import patch
 class IndependentTests(unittest.TestCase):
  def test_odds(self):
@@ -11,6 +13,9 @@ class IndependentTests(unittest.TestCase):
   o=offer("HOME",.60,-110,-110)
   self.assertAlmostEqual(o["edge_pp"],10.0)
   self.assertGreater(o["ev_pct"],0)
+ def test_calibration_rejects_insufficient_history(self):
+  with self.assertRaisesRegex(RuntimeError,"ML OOS calibration unavailable"):
+   calibrate_ml_oos(["dummy"],pd.DataFrame({"season":[2021],"dummy":[1]}),np.array([.8]))
  def test_paper_only(self):
   with patch("nfl_independent_live_monitor.read",return_value=[]),patch("nfl_independent_live_monitor.save_jsonl") as save:
    p={"season":2026,"week":4,"recommendations":[{"recommended":True,"model":"independent_ml_full_v1","game":"DAL @ PHI","side":"PHI","stake":0}],"diagnostics":[]}
