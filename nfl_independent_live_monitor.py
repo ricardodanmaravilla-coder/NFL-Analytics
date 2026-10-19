@@ -144,7 +144,8 @@ def independent_scan(season,week):
                           "captured_at":stamp,"mode":"PAPER_ONLY","stake":0})
                 # All model recommendations above threshold are logged, not only
                 # apparent positive ROI; every quoted side is saved as a snapshot.
-                x["recommended"]=x["probability"]>=58 and x["edge_pp"]>=3 and x["ev_pct"]>=3
+                x["rejection_reasons"]=([reason for failed,reason in ((x["probability"]<58,"PROBABILITY_BELOW_58"),(x["edge_pp"]<3,"EDGE_BELOW_3PP"),(x["ev_pct"]<3,"EV_BELOW_3PCT")) if failed])
+                x["recommended"]=not x["rejection_reasons"]
                 if x["recommended"]:
                     x.update(paper_kelly(x["probability"]/100.0,x["odds"]))
                 else:
@@ -155,7 +156,14 @@ def independent_scan(season,week):
                 out.append(x)
         diagnostics.append({"game":game,"status":"QUOTED" if available else "NO_COMPLETE_MARKET",
                             "quoted_sides":available})
-    return {"season":season,"week":week,"captured_at":stamp,
+    # Audit each market independently: rejected sides, current recommendations and missing quotes.
+    market_diagnostics={market:{"quoted":sum(x["market"]==market for x in out),
+       "eligible":sum(x["market"]==market and x["recommended"] for x in out),
+       "rejected":sum(x["market"]==market and not x["recommended"] for x in out),
+       "rejection_reasons":{reason:sum(x["market"]==market and reason in x["rejection_reasons"] for x in out)
+           for reason in ("PROBABILITY_BELOW_58","EDGE_BELOW_3PP","EV_BELOW_3PCT")}}
+       for market in VARIANTS}
+    return {"season":season,"week":week,"captured_at":stamp,"market_diagnostics":market_diagnostics,
             "provenance":{"current_season_final_scores_included":True,
              "current_season_qb_pbp_verified":False,"pregame_weather_verified":False,
              "odds_source":"TheRundown","money_staked":0},
@@ -174,6 +182,8 @@ def persist(result):
     save_jsonl(ROOT/"independent_snapshots.jsonl",[result])
     save_jsonl(path,new)
     return {"new":len(new),"total":len(prior),"quoted_sides":len(result["recommendations"]),
+            "eligible_this_scan":sum(x["recommended"] for x in result["recommendations"]),
+            "market_diagnostics":result.get("market_diagnostics",{}),
             "diagnostics":result["diagnostics"]}
 def settle():
     pending=[r for r in read(ROOT/"independent_recommendations.jsonl")
