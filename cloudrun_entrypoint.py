@@ -87,6 +87,7 @@ def _week_games(season: int, week: int):
     return games
 
 
+@app.get("/api/triple80/{season}/{week}")
 @app.get("/api/triple100/{season}/{week}")
 def triple100_scan(season: int, week: int):
     """Read-only Triple 100 preview. Never places bets or writes to Sheets."""
