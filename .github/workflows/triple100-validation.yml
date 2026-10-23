@@ -1,0 +1,24 @@
+name: Triple 100 validation
+on:
+  pull_request:
+    paths:
+      - 'modules/nfl_triple100_*.py'
+      - 'modules/nfl_therundown_odds.py'
+      - 'test_nfl_triple100*.py'
+      - 'cloudrun_entrypoint.py'
+      - '.github/workflows/triple100-validation.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install pytest pandas requests
+      - name: Run isolated Triple100 suite
+        run: python -m pytest -q test_nfl_triple100_fullgame.py test_nfl_triple100_live.py test_nfl_therundown_odds.py
+      - name: Syntax check production entrypoint
+        run: python -m py_compile cloudrun_entrypoint.py modules/nfl_triple100_fullgame.py modules/nfl_triple100_live.py modules/nfl_therundown_odds.py
