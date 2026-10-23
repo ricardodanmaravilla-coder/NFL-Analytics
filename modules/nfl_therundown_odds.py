@@ -44,10 +44,11 @@ def _norm_team(value):
 
 
 def _keys():
-    """Primary key first; secondary key is failover only."""
+    """Up to three distinct keys; fail over on temporary/auth/quota failures."""
     values = [
         os.getenv("THERUNDOWN_KEY", "").strip(),
         os.getenv("THERUNDOWN_KEY_2", "").strip(),
+        os.getenv("THERUNDOWN_KEY_3", "").strip(),
     ]
     return list(dict.fromkeys(x for x in values if x))
 

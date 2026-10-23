@@ -87,6 +87,33 @@ def _week_games(season: int, week: int):
     return games
 
 
+@app.get("/api/triple100/{season}/{week}")
+def triple100_scan(season: int, week: int):
+    """Read-only Triple 100 preview. Never places bets or writes to Sheets."""
+    from datetime import datetime, timezone
+    from modules.nfl_triple100_live import scan_live
+    try:
+        slate = _week_games(season, week)
+        today = datetime.now(timezone.utc).date()
+        upcoming = []
+        for _, g in slate.iterrows():
+            date = pd.to_datetime(g.get("gameday"), errors="coerce")
+            if pd.isna(date) or date.date() < today:
+                continue
+            upcoming.append({"home_team": g["home_team"], "away_team": g["away_team"],
+                             "gameday": date.date().isoformat()})
+        if not upcoming:
+            return {"ok": True, "season": season, "week": week,
+                    "checked": 0, "approved": [], "unpriced_games": [],
+                    "reason": "NO_UPCOMING_GAMES"}
+        seasons = list(range(max(1999, season - 27), season + 1))
+        history = base.nfl.import_schedules(seasons)
+        result = scan_live(history, upcoming)
+        return {"season": season, "week": week, "upcoming_games": len(upcoming), **result}
+    except Exception as exc:
+        raise base.HTTPException(status_code=503, detail=f"TRIPLE100_UNAVAILABLE:{type(exc).__name__}")
+
+
 @app.get("/api/slate/{season}/{week}")
 def slate(season: int, week: int):
     """Cartelera rápida con ML, spread y total reales; sin entrenar modelos."""
