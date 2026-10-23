@@ -6,7 +6,7 @@ for results, TheRundown for actionable candidate lines.
 from .nfl_therundown_odds import get_markets, configured
 from .nfl_triple100_fullgame import evaluate
 
-def scan_live(schedules, upcoming):
+def scan_live(schedules, upcoming, include_all=False):
     """upcoming: iterable of {home_team, away_team, gameday} (unplayed games).
     Returns approved trend rows plus diagnostics. No bets or sheet writes.
     """
@@ -16,6 +16,7 @@ def scan_live(schedules, upcoming):
     approved = []
     unpriced = []
     checked = 0
+    diagnostics = []
     for game in upcoming:
         home, away, day = game["home_team"], game["away_team"], str(game["gameday"])[:10]
         quote = get_markets(home, away, day)
@@ -41,11 +42,19 @@ def scan_live(schedules, upcoming):
             result = evaluate(schedules, team=team, opponent=opponent,
                               kickoff=day, venue=venue, market=market, line=line)
             checked += 1
+            result.update({"american_odds": odd, "book": book,
+                           "fetched_at": quote.get("fetched_at"),
+                           "odds_source": "TheRundown",
+                           "slate_date": quote.get("slate_date")})
+            if include_all:
+                failed = []
+                for name, sample in result["samples"].items():
+                    if sample["games"] < 4:
+                        failed.append(f"{name}:INSUFFICIENT_GAMES")
+                    elif not sample["passed"]:
+                        failed.append(f"{name}:BELOW_80_PERCENT")
+                diagnostics.append({**result, "reasons": failed or ["APPROVED"]})
             if result["triple_80"]:
-                result.update({"american_odds":odd,"book":book,
-                               "fetched_at":quote.get("fetched_at"),
-                               "odds_source":"TheRundown",
-                               "slate_date":quote.get("slate_date")})
                 approved.append(result)
     return {"ok": True, "approved": approved, "checked": checked,
-            "unpriced_games": unpriced}
+            "unpriced_games": unpriced, **({"diagnostics": diagnostics} if include_all else {})}
