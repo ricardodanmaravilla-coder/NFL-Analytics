@@ -87,6 +87,7 @@ def _week_games(season: int, week: int):
     return games
 
 
+@app.get("/api/triple75/{season}/{week}")
 @app.get("/api/triple80/{season}/{week}")
 @app.get("/api/triple100/{season}/{week}")
 def triple100_scan(season: int, week: int, diagnostics: bool = False):
@@ -177,3 +178,24 @@ loadSlate();
 def triple80_diagnostics(season: int, week: int):
     """All checked markets including failed trend windows, read-only."""
     return triple100_scan(season, week, diagnostics=True)
+
+@app.get("/api/triple75/models/{season}/{week}")
+def triple75_models(season: int, week: int):
+    """Read-only scan with independent production ML and empirical Monte Carlo."""
+    from modules.nfl_triple75_models import evaluate_approved
+    try:
+        trends = triple100_scan(season, week, diagnostics=False)
+        if not trends.get("ok"):
+            return trends
+        approved = trends.get("approved", [])
+        if not approved:
+            return {**trends, "evaluated": [], "model_favorable": 0}
+        ml, _, history = get_models_fresh(season, week)
+        slate = _week_games(season, week)
+        scored = evaluate_approved(approved, slate, ml, history)
+        return {**trends, "evaluated": scored,
+                "model_favorable": sum(x["status"] == "MODEL_FAVORABLE" for x in scored),
+                "model_note": "Read-only. No sheet writes, no auto bets."}
+    except Exception as exc:
+        raise base.HTTPException(status_code=503, detail=f"TRIPLE75_MODELS_UNAVAILABLE:{type(exc).__name__}")
+
