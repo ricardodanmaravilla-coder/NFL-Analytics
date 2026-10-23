@@ -89,7 +89,7 @@ def _week_games(season: int, week: int):
 
 @app.get("/api/triple80/{season}/{week}")
 @app.get("/api/triple100/{season}/{week}")
-def triple100_scan(season: int, week: int):
+def triple100_scan(season: int, week: int, diagnostics: bool = False):
     """Read-only Triple 100 preview. Never places bets or writes to Sheets."""
     from datetime import datetime, timezone
     from modules.nfl_triple100_live import scan_live
@@ -109,7 +109,7 @@ def triple100_scan(season: int, week: int):
                     "reason": "NO_UPCOMING_GAMES"}
         seasons = list(range(max(1999, season - 27), season + 1))
         history = base.nfl.import_schedules(seasons)
-        result = scan_live(history, upcoming)
+        result = scan_live(history, upcoming, include_all=diagnostics)
         return {"season": season, "week": week, "upcoming_games": len(upcoming), **result}
     except Exception as exc:
         raise base.HTTPException(status_code=503, detail=f"TRIPLE100_UNAVAILABLE:{type(exc).__name__}")
@@ -171,3 +171,9 @@ async function settleNow(){const o=document.getElementById('out');o.innerHTML='A
 async function go(){const o=document.getElementById('out');o.innerHTML='Analizando ML + Handicap + O/U con ML + Monte Carlo + Elo + clima...';try{const r=await fetch(`/api/scan/${s.value}/${w.value}?bankroll=${encodeURIComponent(b.value)}`);const j=await readJsonOrError(r);let h=`<h2>Recomendaciones</h2><div class="muted">Bankroll $${money(j.bankroll)} · mínimo ${j.min_probability}% · ${j.kelly_policy}</div><div class="muted">Mercados: ${(j.markets||[]).join(' · ')} · ${j.market_policy||''}</div>`;const ss=j.sheet_sync||{};h+=ss.ok?`<div class="muted">Sheet NFL_Picks: ${ss.inserted||0} nuevas · ${ss.updated||0} actualizadas</div>`:`<div class="muted">Sheet NFL_Picks: no guardó · ${ss.message||'error'}</div>`;h+=settleText(j.settlement);if(j.bets.length===0)h+='<p>No hay BET robusto.</p>';for(const p of j.bets)h+=card(p,true);if(j.leans.length){h+=`<details><summary>LEAN (${j.leans.length})</summary>`;for(const p of j.leans)h+=card(p,false);h+='</details>'}o.innerHTML=h}catch(e){o.innerHTML='<b>Error:</b> '+e.message}}
 loadSlate();
 </script></body></html>"""
+
+
+@app.get("/api/triple80/diagnostics/{season}/{week}")
+def triple80_diagnostics(season: int, week: int):
+    """All checked markets including failed trend windows, read-only."""
+    return triple100_scan(season, week, diagnostics=True)
