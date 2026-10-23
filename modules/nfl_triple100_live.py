@@ -1,4 +1,4 @@
-"""Live full-game Triple 80 scan using TheRundown market snapshots.
+"""Live full-game Triple 75 scan using TheRundown market snapshots.
 
 Never manufacture prices: missing market legs are omitted. Data source nflverse
 for results, TheRundown for actionable candidate lines.
@@ -52,9 +52,9 @@ def scan_live(schedules, upcoming, include_all=False):
                     if sample["games"] < 4:
                         failed.append(f"{name}:INSUFFICIENT_GAMES")
                     elif not sample["passed"]:
-                        failed.append(f"{name}:BELOW_80_PERCENT")
+                        failed.append(f"{name}:BELOW_75_PERCENT")
                 diagnostics.append({**result, "reasons": failed or ["APPROVED"]})
-            if result["triple_80"]:
+            if result["triple_75"]:
                 approved.append(result)
     return {"ok": True, "approved": approved, "checked": checked,
             "unpriced_games": unpriced, **({"diagnostics": diagnostics} if include_all else {})}
