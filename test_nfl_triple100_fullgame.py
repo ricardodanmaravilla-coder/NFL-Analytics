@@ -49,3 +49,17 @@ def test_reject_relaxed_minimum():
     with pytest.raises(ValueError):
         evaluate(sample(),team="AAA",opponent="BBB",kickoff="2026-10-26",
                  venue="home",market="moneyline",min_games=3)
+
+def test_eighty_percent_accepts_four_of_five():
+    df=sample()
+    df=pd.concat([df,pd.DataFrame([dict(gameday="2025-10-01",home_team="AAA",away_team="BBB",home_score=10,away_score=17,game_type="REG")])],ignore_index=True)
+    r=evaluate(df,team="AAA",opponent="BBB",kickoff="2026-10-26",venue="home",market="moneyline")
+    assert r["triple_80"] is True
+    assert r["triple_100"] is False
+    assert all(v["wins"] == 4 and v["games"] == 5 for v in r["samples"].values())
+
+def test_seventy_five_percent_rejected():
+    df=sample().copy()
+    df.loc[0,"home_score"]=10
+    r=evaluate(df,team="AAA",opponent="BBB",kickoff="2026-10-26",venue="home",market="moneyline")
+    assert r["triple_80"] is False
