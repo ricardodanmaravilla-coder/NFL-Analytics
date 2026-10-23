@@ -93,7 +93,7 @@ def evaluate(schedules, *, team, opponent, kickoff, venue, market, line=None,
     return {"team": team, "opponent": opponent, "kickoff": str(kickoff),
             "venue": venue, "market": market, "line": line,
             "triple_80": all(v["passed"] for v in out.values()),
-            "triple_100": all(v["passed"] for v in out.values()),  # legacy field: compatibility
+            "triple_100": all(v["games"] >= min_games and v["wins"] == v["games"] for v in out.values()),
             "minimum_rate": MIN_RATE,
             "samples": out, "source": "nflverse_schedules"}
 
