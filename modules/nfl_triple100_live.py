@@ -1,4 +1,4 @@
-"""Live full-game Triple 100 scan using TheRundown market snapshots.
+"""Live full-game Triple 80 scan using TheRundown market snapshots.
 
 Never manufacture prices: missing market legs are omitted. Data source nflverse
 for results, TheRundown for actionable candidate lines.
@@ -41,7 +41,7 @@ def scan_live(schedules, upcoming):
             result = evaluate(schedules, team=team, opponent=opponent,
                               kickoff=day, venue=venue, market=market, line=line)
             checked += 1
-            if result["triple_100"]:
+            if result["triple_80"]:
                 result.update({"american_odds":odd,"book":book,
                                "fetched_at":quote.get("fetched_at"),
                                "odds_source":"TheRundown",
