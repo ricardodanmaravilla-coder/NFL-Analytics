@@ -1,4 +1,4 @@
-"""Triple-80 full-game scanner using nflverse schedule data (no Linemate scraping).
+"""Triple-75 full-game scanner using nflverse schedule data (no Linemate scraping).
 
 Markets are evaluated against today's candidate line, not old closing lines.
 A strict push does NOT count as a win. Samples can overlap by design.
@@ -8,7 +8,7 @@ import math
 import pandas as pd
 
 MIN_SAMPLE = 4
-MIN_RATE = 0.80
+MIN_RATE = 0.75
 WINDOWS = {"general": 11, "h2h": 8, "venue": 8}
 SUPPORTED = {"moneyline", "spread", "total_over", "total_under"}
 
@@ -92,7 +92,8 @@ def evaluate(schedules, *, team, opponent, kickoff, venue, market, line=None,
                      "rate": wins / count if count else None, "passed": good}
     return {"team": team, "opponent": opponent, "kickoff": str(kickoff),
             "venue": venue, "market": market, "line": line,
-            "triple_80": all(v["passed"] for v in out.values()),
+            "triple_75": all(v["passed"] for v in out.values()),
+            "triple_80": all(v["games"] >= min_games and v["rate"] >= 0.80 for v in out.values()),
             "triple_100": all(v["games"] >= min_games and v["wins"] == v["games"] for v in out.values()),
             "minimum_rate": MIN_RATE,
             "samples": out, "source": "nflverse_schedules"}
