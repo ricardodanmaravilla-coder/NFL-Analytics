@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 20/10/2026 09:18 UTC
+**Última actualización:** 25/10/2026 14:38 UTC
 
 ## 📊 Resumen
 
@@ -16,17 +16,17 @@
 
 **📏 SPREAD · Hándicap**
 
-**15 picks** · 🟡 0 pendientes · 🟢 8 ganadas · 🔴 7 perdidas · ⚪ 0 anuladas
+**17 picks** · 🟡 2 pendientes · 🟢 8 ganadas · 🔴 7 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** +3.5%
 
 **🎯 TOTALES · Over/Under**
 
-**10 picks** · 🟡 0 pendientes · 🟢 5 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
+**11 picks** · 🟡 1 pendientes · 🟢 5 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** -6.4%
 
-**Último escaneo:** 2026-10-19 04:01 UTC
+**Último escaneo:** 2026-10-25 14:38 UTC
 
 ---
 
@@ -215,6 +215,46 @@
 ---
 
 ## 📏 SPREAD · Hándicap
+
+### NYG @ HOU
+
+**🎯 PICK: NYG +10.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 66.98%  
+**Cuota:** -112 · DraftKings  
+**Ventaja estimada:** 16.55 puntos porcentuales  
+**EV estimado:** 26.78%
+
+**Kelly teórico:** 30.00%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 7.50%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-10-25 14:38 UTC</sub>
+
+---
+
+### DAL @ PHI
+
+**🎯 PICK: PHI +4.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 59.37%  
+**Cuota:** -112 · DraftKings  
+**Ventaja estimada:** 8.93 puntos porcentuales  
+**EV estimado:** 12.37%
+
+**Kelly teórico:** 13.86%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.47%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-10-25 14:38 UTC</sub>
+
+---
 
 ### ARI @ LA
 
@@ -519,6 +559,26 @@
 ---
 
 ## 🎯 TOTALES · Over/Under
+
+### GB @ DET
+
+**🎯 PICK: Under 55.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 65.22%  
+**Cuota:** -110 · DraftKings  
+**Ventaja estimada:** 15.22 puntos porcentuales  
+**EV estimado:** 24.52%
+
+**Kelly teórico:** 26.96%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 6.74%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-10-25 14:38 UTC</sub>
+
+---
 
 ### CHI @ ATL
 
