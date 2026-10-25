@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 25/10/2026 14:38 UTC
+**Última actualización:** 25/10/2026 17:21 UTC
 
 ## 📊 Resumen
 
@@ -26,7 +26,7 @@
 
 **ROI simulado:** -6.4%
 
-**Último escaneo:** 2026-10-25 14:38 UTC
+**Último escaneo:** 2026-10-25 17:21 UTC
 
 ---
 
