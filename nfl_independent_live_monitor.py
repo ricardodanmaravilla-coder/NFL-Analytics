@@ -3,6 +3,7 @@ ML FULL RF classifier, SPREAD BASE RF regressor, TOTAL BASE RF regressor.
 No production API scan, no wagers, no Sheets writes, no artificial prices.
 """
 import json
+import os
 from datetime import datetime,timezone
 from pathlib import Path
 import numpy as np
@@ -112,7 +113,9 @@ def calibrate_ml_oos(features,training,predictions):
 def independent_scan(season,week):
     training,test,upcoming=history_and_future(season,week)
     if test is None:return {"season":season,"week":week,"recommendations":[],"diagnostics":["NO_FUTURE_GAMES"]}
-    r=requests.get(f"{BASE}/api/slate/{season}/{week}",timeout=120)
+    token=os.getenv("NFL_SHADOW_ID_TOKEN","").strip()
+    headers={"Authorization":f"Bearer {token}"} if token else {}
+    r=requests.get(f"{BASE}/api/slate/{season}/{week}",headers=headers,timeout=120)
     r.raise_for_status()
     slate=r.json()
     if slate.get("odds_provider")!="TheRundown":raise RuntimeError("Real TheRundown odds required")
