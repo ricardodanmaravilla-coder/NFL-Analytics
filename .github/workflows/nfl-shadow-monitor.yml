@@ -18,6 +18,7 @@ on:
     - cron: '0 14 * * 0'
 permissions:
   contents: write
+  id-token: write
 concurrency:
   group: nfl-shadow-monitor
   cancel-in-progress: false
@@ -36,9 +37,19 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Validate syntax
         run: python -m compileall -q nfl_shadow_monitor.py nfl_independent_live_monitor.py nfl_shadow_dashboard.py
+      - name: Authenticate to Google Cloud for private Cloud Run
+        id: gcp_auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/664101772310/locations/global/workloadIdentityPools/nfl-github-pool/providers/github-nfl
+          service_account: id-nfl-independent-runner@nfl-analytics-506819.iam.gserviceaccount.com
+          token_format: id_token
+          id_token_audience: https://nfl-analytics-664101772310.northamerica-south1.run.app
+          id_token_include_email: true
       - name: Capture predictions and settle prior picks
         env:
           NFL_SHADOW_API: https://nfl-analytics-664101772310.northamerica-south1.run.app
+          NFL_SHADOW_ID_TOKEN: ${{ steps.gcp_auth.outputs.id_token }}
           SEASON: ${{ github.event.inputs.season }}
           WEEK: ${{ github.event.inputs.week }}
         shell: bash
