@@ -16,6 +16,8 @@ on:
   schedule:
     # Sunday 08:00 America/Mexico_City (UTC-6)
     - cron: '0 14 * * 0'
+    # Backup at 09:00 local; GitHub scheduled events may be delayed or skipped.
+    - cron: '0 15 * * 0'
 permissions:
   contents: write
 concurrency:
@@ -75,4 +77,4 @@ jobs:
           fi
           git push origin main
 
-# Manual independent scanner invocation requested 2026-10-18; no schedule or model changes.
+# Sunday backup schedule and push-triggered recovery run, 2026-10-25.
