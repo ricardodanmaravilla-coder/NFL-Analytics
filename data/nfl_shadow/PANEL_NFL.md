@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 25/10/2026 17:21 UTC
+**Última actualización:** 26/10/2026 09:35 UTC
 
 ## 📊 Resumen
 
@@ -16,15 +16,15 @@
 
 **📏 SPREAD · Hándicap**
 
-**17 picks** · 🟡 2 pendientes · 🟢 8 ganadas · 🔴 7 perdidas · ⚪ 0 anuladas
+**17 picks** · 🟡 1 pendientes · 🟢 9 ganadas · 🔴 7 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +3.5%
+**ROI simulado:** +8.9%
 
 **🎯 TOTALES · Over/Under**
 
-**11 picks** · 🟡 1 pendientes · 🟢 5 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
+**11 picks** · 🟡 0 pendientes · 🟢 6 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** -6.4%
+**ROI simulado:** +2.4%
 
 **Último escaneo:** 2026-10-25 17:21 UTC
 
@@ -220,7 +220,7 @@
 
 **🎯 PICK: NYG +10.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 66.98%  
 **Cuota:** -112 · DraftKings  
@@ -230,7 +230,7 @@
 **Kelly teórico:** 30.00%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 7.50%
 
-**Marcador:** Por jugar
+**Marcador:** 27–21 (visita–local)
 
 <sub>Capturado: 2026-10-25 14:38 UTC</sub>
 
@@ -564,7 +564,7 @@
 
 **🎯 PICK: Under 55.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 65.22%  
 **Cuota:** -110 · DraftKings  
@@ -574,7 +574,7 @@
 **Kelly teórico:** 26.96%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 6.74%
 
-**Marcador:** Por jugar
+**Marcador:** 17–20 (visita–local)
 
 <sub>Capturado: 2026-10-25 14:38 UTC</sub>
 
