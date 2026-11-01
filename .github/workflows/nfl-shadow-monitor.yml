@@ -87,3 +87,4 @@ jobs:
           git push origin main
 
 # Sunday backup schedule and push-triggered recovery run, 2026-10-25.
+# Manual recovery trigger: 2026-11-01 (week 8); no scanner logic changed.
