@@ -4,33 +4,73 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 27/10/2026 09:43 UTC
+**Última actualización:** 01/11/2026 14:05 UTC
 
 ## 📊 Resumen
 
 **🏆 MONEYLINE · Ganador**
 
-**9 picks** · 🟡 0 pendientes · 🟢 5 ganadas · 🔴 4 perdidas · ⚪ 0 anuladas
+**11 picks** · 🟡 2 pendientes · 🟢 5 ganadas · 🔴 4 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** -7.5%
 
 **📏 SPREAD · Hándicap**
 
-**17 picks** · 🟡 0 pendientes · 🟢 9 ganadas · 🔴 8 perdidas · ⚪ 0 anuladas
+**20 picks** · 🟡 3 pendientes · 🟢 9 ganadas · 🔴 8 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** +2.5%
 
 **🎯 TOTALES · Over/Under**
 
-**11 picks** · 🟡 0 pendientes · 🟢 6 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
+**13 picks** · 🟡 2 pendientes · 🟢 6 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** +2.4%
 
-**Último escaneo:** 2026-10-25 17:21 UTC
+**Último escaneo:** 2026-11-01 14:05 UTC
 
 ---
 
 ## 🏆 MONEYLINE · Ganador
+
+### CLE @ PIT
+
+**🎯 PICK: PIT ML**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 68.44%  
+**Cuota:** -192 · DraftKings  
+**Ventaja estimada:** 5.35 puntos porcentuales  
+**EV estimado:** 4.09%
+
+**Kelly teórico:** 7.84%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 1.96%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-01 14:05 UTC</sub>
+
+---
+
+### KC @ DEN
+
+**🎯 PICK: DEN ML**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 62.86%  
+**Cuota:** -105 · DraftKings  
+**Ventaja estimada:** 13.95 puntos porcentuales  
+**EV estimado:** 22.73%
+
+**Kelly teórico:** 23.86%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.97%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-01 14:05 UTC</sub>
+
+---
 
 ### BAL @ CLE
 
@@ -215,6 +255,66 @@
 ---
 
 ## 📏 SPREAD · Hándicap
+
+### ARI @ DAL
+
+**🎯 PICK: ARI +7**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 58.31%  
+**Cuota:** -110 · DraftKings  
+**Ventaja estimada:** 8.31 puntos porcentuales  
+**EV estimado:** 11.33%
+
+**Kelly teórico:** 12.45%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.11%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-01 14:05 UTC</sub>
+
+---
+
+### KC @ DEN
+
+**🎯 PICK: DEN +1.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 58.9%  
+**Cuota:** -120 · DraftKings  
+**Ventaja estimada:** 6.73 puntos porcentuales  
+**EV estimado:** 7.98%
+
+**Kelly teórico:** 9.58%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.39%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-01 14:05 UTC</sub>
+
+---
+
+### PHI @ WAS
+
+**🎯 PICK: PHI +6.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 66.86%  
+**Cuota:** -112 · DraftKings  
+**Ventaja estimada:** 16.43 puntos porcentuales  
+**EV estimado:** 26.56%
+
+**Kelly teórico:** 29.74%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 7.44%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-01 14:05 UTC</sub>
+
+---
 
 ### NYG @ HOU
 
@@ -559,6 +659,46 @@
 ---
 
 ## 🎯 TOTALES · Over/Under
+
+### ARI @ DAL
+
+**🎯 PICK: Under 54.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 68.27%  
+**Cuota:** -108 · DraftKings  
+**Ventaja estimada:** 18.7 puntos porcentuales  
+**EV estimado:** 31.48%
+
+**Kelly teórico:** 34.00%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 8.50%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-01 14:05 UTC</sub>
+
+---
+
+### BAL @ BUF
+
+**🎯 PICK: Under 54.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 62.18%  
+**Cuota:** -110 · DraftKings  
+**Ventaja estimada:** 12.18 puntos porcentuales  
+**EV estimado:** 18.7%
+
+**Kelly teórico:** 20.58%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.14%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-01 14:05 UTC</sub>
+
+---
 
 ### GB @ DET
 
