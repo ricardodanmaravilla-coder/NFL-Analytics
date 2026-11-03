@@ -22,15 +22,35 @@ def odds_decimal(x):
     x=float(x)
     return 1+x/100 if x>=100 else (1+100/abs(x) if x<=-100 else None)
 def paper_kelly(p, odd, bankroll=5000.0):
-    """Hypothetical staking only: quarter-Kelly capped at 10%; no forced minimum."""
+    """Paper-only probability-tier staking; preserve Kelly values for diagnostics.
+
+    Assigned stake is monotonic in model probability, independent of odds.
+    Historical saved recommendations remain unchanged.
+    """
     d=odds_decimal(odd)
-    if d is None:return {"kelly_full_pct":0.0,"kelly_quarter_pct":0.0,"kelly_assigned_pct":0.0,"paper_stake":0.0}
-    b=d-1.0
-    full=max(0.0,(b*p-(1-p))/b)
+    full=0.0
+    if d is not None:
+        b=d-1.0
+        full=max(0.0,(b*p-(1-p))/b)
     quarter=full/4.0
-    assigned=min(0.10,quarter)  # Never inflate a smaller Kelly estimate to a 3% minimum
-    return {"kelly_full_pct":round(full*100,2),"kelly_quarter_pct":round(quarter*100,2),
-            "kelly_assigned_pct":round(assigned*100,2),"paper_stake":round(bankroll*assigned,2)}
+    probability_pct=100.0*p
+    if probability_pct < 55:
+        assigned=0.0
+    elif probability_pct < 60:
+        assigned=0.03
+    elif probability_pct < 65:
+        assigned=0.05
+    elif probability_pct < 70:
+        assigned=0.07
+    elif probability_pct < 75:
+        assigned=0.08
+    else:
+        assigned=0.10
+    return {"kelly_full_pct":round(full*100,2),
+            "kelly_quarter_pct":round(quarter*100,2),
+            "kelly_assigned_pct":round(assigned*100,2),
+            "paper_stake":round(bankroll*assigned,2),
+            "stake_method":"PROBABILITY_TIERS_V1"}
 
 def offer(side,p,odd,other,line=None):
     d=odds_decimal(odd);e=odds_decimal(other)
