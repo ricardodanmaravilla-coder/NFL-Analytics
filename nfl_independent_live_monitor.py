@@ -22,35 +22,24 @@ def odds_decimal(x):
     x=float(x)
     return 1+x/100 if x>=100 else (1+100/abs(x) if x<=-100 else None)
 def paper_kelly(p, odd, bankroll=5000.0):
-    """Paper-only probability-tier staking; preserve Kelly values for diagnostics.
+    """Paper-only linear stake: 3% at 58% probability to 20% at >=90%.
 
-    Assigned stake is monotonic in model probability, independent of odds.
-    Historical saved recommendations remain unchanged.
+    Keep conventional Kelly as diagnostics only; odds never determine assigned stake.
+    Eligibility thresholds remain unchanged, and saved history is not recalculated.
     """
     d=odds_decimal(odd)
     full=0.0
     if d is not None:
-        b=d-1.0
-        full=max(0.0,(b*p-(1-p))/b)
+        net=d-1.0
+        full=max(0.0,(net*p-(1-p))/net)
     quarter=full/4.0
     probability_pct=100.0*p
-    if probability_pct < 55:
-        assigned=0.0
-    elif probability_pct < 60:
-        assigned=0.03
-    elif probability_pct < 65:
-        assigned=0.05
-    elif probability_pct < 70:
-        assigned=0.07
-    elif probability_pct < 75:
-        assigned=0.08
-    else:
-        assigned=0.10
+    assigned=0.0 if probability_pct < 58 else min(0.20, 0.03+(probability_pct-58.0)*(0.17/32.0))
     return {"kelly_full_pct":round(full*100,2),
             "kelly_quarter_pct":round(quarter*100,2),
             "kelly_assigned_pct":round(assigned*100,2),
             "paper_stake":round(bankroll*assigned,2),
-            "stake_method":"PROBABILITY_TIERS_V1"}
+            "stake_method":"PROBABILITY_LINEAR_58_TO_90_V2"}
 
 def offer(side,p,odd,other,line=None):
     d=odds_decimal(odd);e=odds_decimal(other)
