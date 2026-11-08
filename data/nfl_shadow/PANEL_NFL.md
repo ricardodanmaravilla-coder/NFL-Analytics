@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 03/11/2026 11:45 UTC
+**Última actualización:** 08/11/2026 18:37 UTC
 
 ## 📊 Resumen
 
@@ -16,17 +16,17 @@
 
 **📏 SPREAD · Hándicap**
 
-**25 picks** · 🟡 5 pendientes · 🟢 11 ganadas · 🔴 9 perdidas · ⚪ 0 anuladas
+**26 picks** · 🟡 5 pendientes · 🟢 11 ganadas · 🔴 10 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +5.8%
+**ROI simulado:** +0.8%
 
 **🎯 TOTALES · Over/Under**
 
-**14 picks** · 🟡 1 pendientes · 🟢 7 ganadas · 🔴 6 perdidas · ⚪ 0 anuladas
+**14 picks** · 🟡 0 pendientes · 🟢 8 ganadas · 🔴 6 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +1.4%
+**ROI simulado:** +7.3%
 
-**Último escaneo:** 2026-11-03 03:45 UTC
+**Último escaneo:** 2026-11-08 18:37 UTC
 
 ---
 
@@ -276,11 +276,31 @@
 
 ## 📏 SPREAD · Hándicap
 
+### ARI @ SEA
+
+**🎯 PICK: ARI +8.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 58.31%  
+**Cuota:** -110 · DraftKings  
+**Ventaja estimada:** 8.31 puntos porcentuales  
+**EV estimado:** 11.33%
+
+**Kelly teórico:** 12.45%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.11%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-08 18:37 UTC</sub>
+
+---
+
 ### JAX @ BAL
 
 **🎯 PICK: BAL +8.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 60.54%  
 **Cuota:** -105 · DraftKings  
@@ -290,7 +310,7 @@
 **Kelly teórico:** 19.11%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.78%
 
-**Marcador:** Por jugar
+**Marcador:** 33–10 (visita–local)
 
 <sub>Capturado: 2026-11-03 03:43 UTC</sub>
 
@@ -784,7 +804,7 @@
 
 **🎯 PICK: Under 52.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 59.37%  
 **Cuota:** -118 · DraftKings  
@@ -794,7 +814,7 @@
 **Kelly teórico:** 11.43%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 2.86%
 
-**Marcador:** Por jugar
+**Marcador:** 34–17 (visita–local)
 
 <sub>Capturado: 2026-11-03 03:43 UTC</sub>
 
