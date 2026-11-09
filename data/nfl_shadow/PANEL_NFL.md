@@ -4,21 +4,21 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 08/11/2026 18:37 UTC
+**Última actualización:** 09/11/2026 12:27 UTC
 
 ## 📊 Resumen
 
 **🏆 MONEYLINE · Ganador**
 
-**12 picks** · 🟡 1 pendientes · 🟢 7 ganadas · 🔴 4 perdidas · ⚪ 0 anuladas
+**12 picks** · 🟡 0 pendientes · 🟢 7 ganadas · 🔴 5 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +7.2%
+**ROI simulado:** -1.7%
 
 **📏 SPREAD · Hándicap**
 
-**26 picks** · 🟡 5 pendientes · 🟢 11 ganadas · 🔴 10 perdidas · ⚪ 0 anuladas
+**26 picks** · 🟡 1 pendientes · 🟢 11 ganadas · 🔴 14 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +0.8%
+**ROI simulado:** -15.3%
 
 **🎯 TOTALES · Over/Under**
 
@@ -36,7 +36,7 @@
 
 **🎯 PICK: NE ML**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 71.29%  
 **Cuota:** -155 · DraftKings  
@@ -46,7 +46,7 @@
 **Kelly teórico:** 26.79%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 6.70%
 
-**Marcador:** Por jugar
+**Marcador:** 45–27 (visita–local)
 
 <sub>Capturado: 2026-11-03 03:43 UTC</sub>
 
@@ -280,7 +280,7 @@
 
 **🎯 PICK: ARI +8.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 58.31%  
 **Cuota:** -110 · DraftKings  
@@ -290,7 +290,7 @@
 **Kelly teórico:** 12.45%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.11%
 
-**Marcador:** Por jugar
+**Marcador:** 3–17 (visita–local)
 
 <sub>Capturado: 2026-11-08 18:37 UTC</sub>
 
@@ -320,7 +320,7 @@
 
 **🎯 PICK: MIA +7**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 62.76%  
 **Cuota:** -112 · DraftKings  
@@ -330,7 +330,7 @@
 **Kelly teórico:** 21.05%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 5.26%
 
-**Marcador:** Por jugar
+**Marcador:** 19–9 (visita–local)
 
 <sub>Capturado: 2026-11-03 03:43 UTC</sub>
 
@@ -340,7 +340,7 @@
 
 **🎯 PICK: NE -3**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 59.6%  
 **Cuota:** -108 · DraftKings  
@@ -350,7 +350,7 @@
 **Kelly teórico:** 15.97%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.99%
 
-**Marcador:** Por jugar
+**Marcador:** 45–27 (visita–local)
 
 <sub>Capturado: 2026-11-03 03:43 UTC</sub>
 
@@ -360,7 +360,7 @@
 
 **🎯 PICK: NYJ +9.5**
 
-**🟡 PENDIENTE**
+**🔴 PERDIDA**
 
 **Probabilidad:** 58.31%  
 **Cuota:** -108 · DraftKings  
@@ -370,7 +370,7 @@
 **Kelly teórico:** 13.28%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.32%
 
-**Marcador:** Por jugar
+**Marcador:** 12–35 (visita–local)
 
 <sub>Capturado: 2026-11-03 03:43 UTC</sub>
 
