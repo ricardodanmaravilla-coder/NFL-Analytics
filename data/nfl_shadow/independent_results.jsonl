@@ -49,3 +49,4 @@
 {"away_score": 45.0, "home_score": 27.0, "paper_return_per_unit": -1, "recommendation_id": "2026|9|independent_spread_baseline_v1|GB @ NE|NE", "result": "LOSS", "settled_at": "2026-11-09T12:27:19.455443+00:00"}
 {"away_score": 12.0, "home_score": 35.0, "paper_return_per_unit": -1, "recommendation_id": "2026|9|independent_spread_baseline_v1|NYJ @ KC|NYJ", "result": "LOSS", "settled_at": "2026-11-09T12:27:19.455449+00:00"}
 {"away_score": 3.0, "home_score": 17.0, "paper_return_per_unit": -1, "recommendation_id": "2026|9|independent_spread_baseline_v1|ARI @ SEA|ARI", "result": "LOSS", "settled_at": "2026-11-09T12:27:19.455456+00:00"}
+{"away_score": 23.0, "home_score": 6.0, "paper_return_per_unit": -1, "recommendation_id": "2026|9|independent_spread_baseline_v1|BUF @ MIN|MIN", "result": "LOSS", "settled_at": "2026-11-10T12:21:50.795484+00:00"}
