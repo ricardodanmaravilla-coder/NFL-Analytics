@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: nfl-settlement
@@ -20,12 +21,24 @@ jobs:
   liquidar:
     runs-on: ubuntu-latest
     steps:
+      - name: Authenticate to private Cloud Run
+        id: gcp_auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/664101772310/locations/global/workloadIdentityPools/nfl-github-pool/providers/github-nfl
+          service_account: id-nfl-independent-runner@nfl-analytics-506819.iam.gserviceaccount.com
+          token_format: id_token
+          id_token_audience: https://nfl-analytics-664101772310.northamerica-south1.run.app
+          id_token_include_email: true
       - name: Liquidar picks pendientes en Cloud Run
+        env:
+          CLOUD_RUN_ID_TOKEN: ${{ steps.gcp_auth.outputs.id_token }}
         shell: bash
         run: |
           set -euo pipefail
           ENDPOINT="https://nfl-analytics-664101772310.northamerica-south1.run.app/api/settle"
-          response="$(curl --fail-with-body --silent --show-error \
+          test -n "$CLOUD_RUN_ID_TOKEN" || { echo "Missing Cloud Run ID token"; exit 1; }
+          response="$(curl -H "Authorization: Bearer $CLOUD_RUN_ID_TOKEN" --fail-with-body --silent --show-error \
             --retry 3 --retry-delay 10 --retry-all-errors \
             --max-time 120 \
             "$ENDPOINT")"
