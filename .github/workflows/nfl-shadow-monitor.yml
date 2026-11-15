@@ -88,3 +88,5 @@ jobs:
 
 # Sunday backup schedule and push-triggered recovery run, 2026-10-25.
 # Manual recovery trigger: 2026-11-01 (week 8); no scanner logic changed.
+
+# Recovery trigger: 2026-11-15 week 10; no model or filter changes.
