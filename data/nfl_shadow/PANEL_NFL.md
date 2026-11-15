@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 10/11/2026 12:21 UTC
+**Última actualización:** 15/11/2026 14:46 UTC
 
 ## 📊 Resumen
 
@@ -16,17 +16,17 @@
 
 **📏 SPREAD · Hándicap**
 
-**26 picks** · 🟡 0 pendientes · 🟢 11 ganadas · 🔴 15 perdidas · ⚪ 0 anuladas
+**28 picks** · 🟡 2 pendientes · 🟢 11 ganadas · 🔴 15 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** -18.6%
 
 **🎯 TOTALES · Over/Under**
 
-**14 picks** · 🟡 0 pendientes · 🟢 8 ganadas · 🔴 6 perdidas · ⚪ 0 anuladas
+**18 picks** · 🟡 4 pendientes · 🟢 8 ganadas · 🔴 6 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** +7.3%
 
-**Último escaneo:** 2026-11-08 18:37 UTC
+**Último escaneo:** 2026-11-15 14:46 UTC
 
 ---
 
@@ -275,6 +275,46 @@
 ---
 
 ## 📏 SPREAD · Hándicap
+
+### JAX @ TEN
+
+**🎯 PICK: TEN +10.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 58.78%  
+**Cuota:** -105 · DraftKings  
+**Ventaja estimada:** 9.87 puntos porcentuales  
+**EV estimado:** 14.77%
+
+**Kelly teórico:** 15.50%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 3.87%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-15 14:46 UTC</sub>
+
+---
+
+### SF @ DAL
+
+**🎯 PICK: SF -4.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 64.17%  
+**Cuota:** -108 · DraftKings  
+**Ventaja estimada:** 14.6 puntos porcentuales  
+**EV estimado:** 23.58%
+
+**Kelly teórico:** 25.47%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 6.37%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-15 14:46 UTC</sub>
+
+---
 
 ### ARI @ SEA
 
@@ -799,6 +839,86 @@
 ---
 
 ## 🎯 TOTALES · Over/Under
+
+### BUF @ NYJ
+
+**🎯 PICK: Under 50.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 65.69%  
+**Cuota:** -105 · DraftKings  
+**Ventaja estimada:** 16.77 puntos porcentuales  
+**EV estimado:** 28.25%
+
+**Kelly teórico:** 29.66%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 7.42%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-15 14:46 UTC</sub>
+
+---
+
+### CAR @ NO
+
+**🎯 PICK: Under 48.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 64.75%  
+**Cuota:** -105 · DraftKings  
+**Ventaja estimada:** 15.84 puntos porcentuales  
+**EV estimado:** 26.42%
+
+**Kelly teórico:** 27.74%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 6.93%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-15 14:46 UTC</sub>
+
+---
+
+### PIT @ CIN
+
+**🎯 PICK: Under 49.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 61.36%  
+**Cuota:** -115 · DraftKings  
+**Ventaja estimada:** 10.27 puntos porcentuales  
+**EV estimado:** 14.71%
+
+**Kelly teórico:** 16.92%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 4.23%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-15 14:46 UTC</sub>
+
+---
+
+### SF @ DAL
+
+**🎯 PICK: Under 55.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 68.38%  
+**Cuota:** -102 · DraftKings  
+**Ventaja estimada:** 20.12 puntos porcentuales  
+**EV estimado:** 35.43%
+
+**Kelly teórico:** 36.13%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 9.03%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-15 14:46 UTC</sub>
+
+---
 
 ### CIN @ ATL
 
