@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 17/11/2026 12:57 UTC
+**Última actualización:** 22/11/2026 20:32 UTC
 
 ## 📊 Resumen
 
@@ -22,11 +22,11 @@
 
 **🎯 TOTALES · Over/Under**
 
-**18 picks** · 🟡 0 pendientes · 🟢 10 ganadas · 🔴 8 perdidas · ⚪ 0 anuladas
+**19 picks** · 🟡 1 pendientes · 🟢 10 ganadas · 🔴 8 perdidas · ⚪ 0 anuladas
 
 **ROI simulado:** +5.2%
 
-**Último escaneo:** 2026-11-15 19:32 UTC
+**Último escaneo:** 2026-11-22 20:32 UTC
 
 ---
 
@@ -839,6 +839,26 @@
 ---
 
 ## 🎯 TOTALES · Over/Under
+
+### CIN @ WAS
+
+**🎯 PICK: Under 54.5**
+
+**🟡 PENDIENTE**
+
+**Probabilidad:** 69.2%  
+**Cuota:** -103 · DraftKings  
+**Ventaja estimada:** 20.62 puntos porcentuales  
+**EV estimado:** 36.39%
+
+**Kelly teórico:** 37.48%  
+**¼ Kelly hipotético (máx. 10%, sin mínimo):** 9.37%
+
+**Marcador:** Por jugar
+
+<sub>Capturado: 2026-11-22 20:32 UTC</sub>
+
+---
 
 ### BUF @ NYJ
 
