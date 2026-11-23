@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 22/11/2026 20:32 UTC
+**Última actualización:** 23/11/2026 13:57 UTC
 
 ## 📊 Resumen
 
