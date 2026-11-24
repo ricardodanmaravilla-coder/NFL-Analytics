@@ -4,7 +4,7 @@
 
 > **Dinero apostado: $0** · Kelly exclusivamente hipotético.
 
-**Última actualización:** 23/11/2026 13:57 UTC
+**Última actualización:** 24/11/2026 14:41 UTC
 
 ## 📊 Resumen
 
@@ -22,9 +22,9 @@
 
 **🎯 TOTALES · Over/Under**
 
-**19 picks** · 🟡 1 pendientes · 🟢 10 ganadas · 🔴 8 perdidas · ⚪ 0 anuladas
+**19 picks** · 🟡 0 pendientes · 🟢 11 ganadas · 🔴 8 perdidas · ⚪ 0 anuladas
 
-**ROI simulado:** +5.2%
+**ROI simulado:** +10.0%
 
 **Último escaneo:** 2026-11-22 20:32 UTC
 
@@ -844,7 +844,7 @@
 
 **🎯 PICK: Under 54.5**
 
-**🟡 PENDIENTE**
+**🟢 GANADA**
 
 **Probabilidad:** 69.2%  
 **Cuota:** -103 · DraftKings  
@@ -854,7 +854,7 @@
 **Kelly teórico:** 37.48%  
 **¼ Kelly hipotético (máx. 10%, sin mínimo):** 9.37%
 
-**Marcador:** Por jugar
+**Marcador:** 20–22 (visita–local)
 
 <sub>Capturado: 2026-11-22 20:32 UTC</sub>
 
