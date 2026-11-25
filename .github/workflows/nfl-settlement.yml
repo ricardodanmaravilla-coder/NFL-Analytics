@@ -1,9 +1,6 @@
 name: Liquidar Picks NFL
 
 on:
-  schedule:
-    # GitHub cron usa UTC. Ejecutar cada hora evita depender de una sola corrida diaria.
-    - cron: '17 * * * *'
   workflow_dispatch:
   push:
     paths:

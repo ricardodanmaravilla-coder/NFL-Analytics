@@ -2,10 +2,6 @@ name: NFL Independent Settlement
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 4 * * 1"
-    - cron: "0 4 * * 2"
-
 permissions:
   contents: write
 
